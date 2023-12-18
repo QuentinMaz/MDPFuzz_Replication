@@ -1,10 +1,14 @@
+import glob
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
+import matplotlib.animation as animation
 import matplotlib.transforms as transforms
 from scipy.stats import multivariate_normal
 from matplotlib.patches import Ellipse
 from typing import List, Tuple, Union
+from PIL import Image
 
 
 def cross_product_with_dot(vector1: np.ndarray, vector2: np.ndarray):
@@ -149,6 +153,12 @@ def remove_plotted_points(ax):
         line.remove()
 
 
+def remove_gaussian(ax):
+    '''Utility function that calls remove_patches and remove_plotted_points of the axis.'''
+    remove_patches(ax)
+    remove_plotted_points(ax)
+
+
 def log_likelihood(data: np.ndarray, coefficients, means, covariances):
     k = len(coefficients)
     log_likelihoods = []
@@ -160,3 +170,23 @@ def log_likelihood(data: np.ndarray, coefficients, means, covariances):
     return sum(log_likelihoods)
 
 
+def create_gif(images_directory: str):
+    if not images_directory.endswith('/'):
+        images_directory += '/'
+    assert os.path.isdir(images_directory)
+
+    files = glob.glob(f'{images_directory}/*.png')
+    images = []
+    for fp in files:
+        image = Image.open(fp)
+        images.append(image)
+
+    fig, ax = plt.subplots()
+
+    im = ax.imshow(images[0], animated=True)
+    print(type(images[0]))
+    def update(i: int):
+        im.set_array(images[i])
+        return im,
+
+    return animation.FuncAnimation(fig, update, frames=len(images), interval=200, blit=True, repeat_delay=10)

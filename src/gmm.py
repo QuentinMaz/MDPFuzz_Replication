@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 from scipy.stats import multivariate_normal
 from typing import List, Tuple, Dict
-from utils import modify_covariance_matrix, plot_gaussians, generate_clustered_data
+from utils import modify_covariance_matrix, plot_gaussians, generate_clustered_data, create_gif, remove_gaussian
 
 
 class GMM():
@@ -198,8 +198,9 @@ if __name__ == '__main__':
     gmm_init_data = shuffle_data[:k]
     gmm = GMM(0, 2)
     gmm.initialize(gmm_init_data)
-
     plot_gaussians(gmm.means, gmm.covariances, ax)
+    i = 0
+    fig.savefig(f'imgs/iteration_{i}.png')
 
     num_iterations = 10
     batch_size = 100
@@ -210,5 +211,12 @@ if __name__ == '__main__':
         gmm.online_EM(samples, gamma=gamma)
         ll.append(gmm.log_likelihood(shuffle_data))
 
+        i += 1
+        remove_gaussian(ax)
+        plot_gaussians(gmm.means, gmm.covariances, ax)
+        fig.savefig(f'imgs/iteration_{i}.png')
+
     plot_gaussians(gmm.means, gmm.covariances, ax)
     fig.savefig('test_gmm.png')
+    animated_fig = create_gif('imgs')
+    animated_fig.save('test_gmm.gif')
