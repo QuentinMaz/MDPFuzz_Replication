@@ -186,7 +186,7 @@ class CoverageModel():
 
 
 if __name__ == '__main__':
-    test_rng: np.random.Generator = np.random.default_rng(42)
+    test_rng: np.random.Generator = np.random.default_rng(0)
     k = 2
     dim = 2
     cluster_means = [
@@ -198,7 +198,10 @@ if __name__ == '__main__':
     gmm_init_data = shuffle_data[:k]
     gmm = GMM(0, 2)
     gmm.initialize(gmm_init_data)
-    plot_gaussians(gmm.means, gmm.covariances, ax)
+    plot_gaussians(gmm.means, gmm.covariances, ax, cmap_values=[0.42, 0.69])
+    ax.set_xlim(ax.get_xlim())
+    ax.set_ylim(ax.get_ylim())
+
     i = 0
     fig.savefig(f'imgs/iteration_{i}.png')
 
@@ -213,10 +216,9 @@ if __name__ == '__main__':
 
         i += 1
         remove_gaussian(ax)
-        plot_gaussians(gmm.means, gmm.covariances, ax)
+        plot_gaussians(gmm.means, gmm.covariances, ax, cmap_values=[0.42, 0.69])
         fig.savefig(f'imgs/iteration_{i}.png')
 
     plot_gaussians(gmm.means, gmm.covariances, ax)
     fig.savefig('test_gmm.png')
-    animated_fig = create_gif('imgs')
-    animated_fig.save('test_gmm.gif')
+    create_gif('imgs', 'test_gmm.gif', duration=350)
