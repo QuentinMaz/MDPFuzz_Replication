@@ -59,6 +59,7 @@ def generate_clustered_data(
     cluster_means: Union[np.ndarray, list],
     num_points_per_cluster: int = 100,
     spread_factor: float = 0.1,
+    rng: np.random.Generator = np.random.default_rng(),
     plot: bool = False,
     legend: bool = False
 ) -> Tuple[np.ndarray, Union[plt.Figure, None], Union[plt.Axes, None]]:
@@ -81,6 +82,9 @@ def generate_clustered_data(
 
     spread_factor : float, optional
         Spread factor determining the spread of clusters. Defaults to 0.1.
+
+    rng : np.random.Generator, optional
+        The random generator to sample data. Defaults to the default numpy generator.
 
     plot : bool, optional
         Whether to plot the generated data. Defaults to False.
@@ -105,7 +109,7 @@ def generate_clustered_data(
 
     data = []
     for i in range(num_clusters):
-        cluster_data = np.random.multivariate_normal(mean=cluster_means[i], cov=covariances[i*(num_clusters-1)//2], size=num_points_per_cluster)
+        cluster_data = rng.multivariate_normal(mean=cluster_means[i], cov=covariances[i*(num_clusters-1)//2], size=num_points_per_cluster)
         data.append(cluster_data)
 
     generated_data = np.concatenate(data)
@@ -248,3 +252,32 @@ def create_gif(folder_path: str, output_gif_name: str = 'output.gif', duration: 
         duration=duration,
         loop=0
     )
+
+def plot_points(ax, data: Union[np.ndarray, List[np.ndarray]], **kwargs):
+    '''
+        Plots a line with markers along it on a given axis.
+
+    Parameters:
+    -----------
+    ax : matplotlib.axes.Axes
+        The axis on which the Gaussians will be plotted.
+
+    data : Union[np.ndarray, list]
+        The points to plot.
+
+     **kwargs: Additional keyword arguments.
+        - color (str, optional): The color for the line and the markers. Default to blue.
+        - step (int, optional): The step for the x ticks. Default to 1.
+    Returns:
+    --------
+    matplotlib.axes.Axes
+        The axis containing the plotted data.
+    '''
+    color = kwargs.get('color', 'blue')
+    step = kwargs.get('step', 1)
+    x = np.arange(len(data))
+    ax.plot(x, data, color=color)
+    for j, l in enumerate(data):
+        ax.plot(j, l, marker='o', markersize=8, markeredgecolor=color, markerfacecolor=color)
+    ax.set_xticks(x, step=step)
+    return ax

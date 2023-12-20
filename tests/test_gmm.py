@@ -2,14 +2,14 @@ import pytest
 import copy
 import numpy as np
 
-import src.gmm as gmm
-from src.utils import plot_gaussians, generate_clustered_data
-
+from src.utils import plot_gaussians, generate_clustered_data, remove_gaussian
+from src.gmm import GMM
 
 @pytest.fixture(scope='module')
 def input_data():
     k = dim = 2
     means = [[1, 1], [4, 4]]
+    cmap_values = [0.25, 0.55]
     test_rng: np.random.Generator = np.random.default_rng(42)
     initial_data, fig, ax = generate_clustered_data(
         dim,
@@ -17,9 +17,10 @@ def input_data():
         means,
         num_points_per_cluster=1000,
         plot=True,
-        spread_factor=0.05
+        spread_factor=0.05,
+        rng=test_rng
     )
-    gmm = gmm.GMM(0, k)
+    gmm = GMM(0, k)
     test_data = {
         'k': k,
         'dim': dim,
@@ -29,7 +30,8 @@ def input_data():
         'rng': test_rng,
         'initial_data': initial_data,
         'fig': fig,
-        'ax': ax
+        'ax': ax,
+        'colors': cmap_values
     }
 
     return test_data
@@ -39,7 +41,7 @@ def input_data():
 def test_initialize(input_data):
     rng = input_data['rng']
     data_shuffled = rng.permutation(input_data['initial_data'])
-    gmm: gmm.GMM = input_data['gmm']
+    gmm: GMM = input_data['gmm']
     gmm.initialize(data_shuffled[:input_data['k']])
 
     assert True
@@ -47,7 +49,9 @@ def test_initialize(input_data):
     # dirty
     fig = input_data['fig']
     ax = fig.get_axes()[0]
-    plot_gaussians(gmm.means, gmm.covariances, ax)
+    plot_gaussians(gmm.means, gmm.covariances, ax, cmap_values=input_data['colors'])
+    ax.set_xlim(ax.get_xlim())
+    ax.set_ylim(ax.get_ylim())
     fig.savefig('imgs/test_initialize.png')
 
 
@@ -55,7 +59,7 @@ def test_initialize(input_data):
 def test_online_gmm(input_data):
     rng = input_data['rng']
     data_shuffled = rng.permutation(input_data['initial_data'])
-    gmm: gmm.GMM = input_data['gmm']
+    gmm: GMM = input_data['gmm']
     ll = [gmm.log_likelihood(data_shuffled)]
 
     m = len(data_shuffled)
@@ -65,7 +69,7 @@ def test_online_gmm(input_data):
     for _ in range(10):
         samples = data_shuffled[rng.choice(m, size=batch_size)]
         before = gmm.log_likelihood(samples)
-        gmm.online_gmm(samples, gamma=gamma)
+        gmm.online_EM(samples, gamma=gamma)
         after = gmm.log_likelihood(samples)
         assert before < after
         ll.append(gmm.log_likelihood(data_shuffled))
@@ -73,7 +77,8 @@ def test_online_gmm(input_data):
     # dirty
     fig = input_data['fig']
     ax = fig.get_axes()[0]
-    plot_gaussians(gmm.means, gmm.covariances, ax)
+    remove_gaussian(ax)
+    plot_gaussians(gmm.means, gmm.covariances, ax, cmap_values=input_data['colors'])
     fig.savefig('imgs/test_online_gmm.png')
 
 

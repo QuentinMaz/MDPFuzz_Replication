@@ -11,8 +11,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from scipy.stats import multivariate_normal
-from typing import List, Tuple, Dict
-from utils import modify_covariance_matrix, plot_gaussians, generate_clustered_data, create_gif, remove_gaussian
+from typing import List, Tuple, Dict, Union
+
+# or runs python -m src.gmm
+if __package__ is None or __package__ == '':
+    # uses current directory visibility
+    from utils import modify_covariance_matrix, plot_gaussians, generate_clustered_data, create_gif, remove_gaussian
+else:
+    # uses current package visibility
+    from .utils import modify_covariance_matrix, plot_gaussians, generate_clustered_data, create_gif, remove_gaussian
 
 
 class GMM():
@@ -35,7 +42,8 @@ class GMM():
     def initialize(self, data: np.ndarray):
         '''
         Sets the different attributes of the class.
-        Means are weighted '''
+        Means are weighted.
+        '''
         assert len(data) == self.k
         self.dim: int = data.shape[1]
         self.coefficients: np.ndarray = np.ones(self.k) / self.k
@@ -70,7 +78,7 @@ class GMM():
         return coefficients, cs_means, cs_squares
 
 
-    def online_EM(self, states: List[np.ndarray], gamma: float, permute: bool = False):
+    def online_EM(self, states: Union[np.ndarray, List[np.ndarray]], gamma: float, permute: bool = False):
         if permute:
             states = self.rng.permutation(states)
 
@@ -91,8 +99,10 @@ class GMM():
 
     def save(self, filepath: str):
         filepath = filepath.split('.json')[0]
+        configuration = dict()
         # attributes
-        configuration = {p: p for p in [self.k, self.random_seed]}
+        configuration['k'] = self.k
+        configuration['random_seed'] = self.random_seed
         # along with the initial random seed and the states of the two random generators
         configuration['random_state'] = self.rng.bit_generator.state
         configuration['normal_state'] = self.normal.random_state.bit_generator.state
@@ -105,6 +115,31 @@ class GMM():
 
         with open(filepath + '_config.json', 'w') as f:
             f.write(json.dumps(configuration))
+
+
+    def _load_dict(self, configuration: Dict):
+        self.k = configuration['k']
+        self.random_seed = configuration['random_seed']
+
+        self.rng: np.random.Generator = np.random.default_rng(self.random_seed)
+        self.rng.bit_generator.state = configuration['random_state']
+        self.normal = multivariate_normal
+        self.normal.random_state = np.random.default_rng(self.random_seed)
+        self.normal.random_state.bit_generator.state = configuration['normal_state']
+
+        self.coefficients = np.array(configuration['mixing_coefficients'])
+        self.means = np.array(configuration['means'])
+        self.covariances = np.array(configuration['covariances'])
+        self.cs_means = np.array(configuration['cs_means'])
+        self.cs_squares = np.array(configuration['cs_squares'])
+
+
+    def load(self, filepath: str):
+        filepath = filepath.split('.json')[0] + '.json'
+        assert os.path.isfile(filepath)
+        with open(filepath, 'r') as f:
+            config = json.load(f)
+        self._load_dict(config)
 
 
     def log_likelihood(self, data: np.ndarray):
@@ -120,12 +155,14 @@ class GMM():
                 log_likelihoods.append(np.log(tmp))
             return sum(log_likelihoods)
 
-    def gmm(self, state: np.ndarray):
-        total = 0.0
-        for i in range(self.k):
-            total += self.coefficients[i] * self.normal.pdf(state, mean=self.means[i], cov=self.covariances[i])
-        return total
 
+    def gmm(self, state: np.ndarray, add_offset: bool = True) -> np.ndarray:
+        pdf = np.zeros(self.k)
+        for i in range(self.k):
+            pdf[i] = self.coefficients[i] * self.normal.pdf(state, mean=self.means[i], cov=self.covariances[i])
+        if add_offset:
+            pdf += 1e-5
+        return pdf
 
 
 class CoverageModel():
@@ -146,32 +183,58 @@ class CoverageModel():
         self.GMM_c = GMM(self.random_seed, k)
 
 
+    def _concatenate_states(self, states: Union[np.ndarray, List[np.ndarray]], n: int = None) -> np.ndarray:
+        if n is None:
+            n = len(states)
+        else:
+            assert n > 1 and (n < len(states) - 1)
+        return np.array([np.hstack([states[i], states[i+1]] for i in range(n))])
+
+
     def initialize(self, states: List[np.ndarray]):
         '''Initializes the GMMs\' parameters and the CS statistics.'''
         assert len(states) == self.k + 1
 
         self.GMM_s.initialize(np.array(states))
-        states_concatenated = np.array([np.hstack([states[i], states[i+1]] for i in range(self.k))])
+        states_concatenated = self._concatenate_states(states, n=self.k)
         print(f'concatenated states of shape {states_concatenated.shape}')
         self.GMM_c.initialize(states_concatenated)
 
 
-
-    def sequence_freshness(self, state_sequence: List[np.ndarray], tau: float):
+    def sequence_freshness_sheer(self, state_sequence: List[np.ndarray], tau: float):
         first_state = state_sequence[0]
-        density = self.GMM_s.gmm(first_state)
-
+        density = self.GMM_s.gmm(first_state, add_offset=True)
         # indices are shifted compared to the definition
         for i in range(1, len(state_sequence)):
-            density *= (self.GMM_s.gmm(state_sequence[i]) / self.GMM_c.gmm(np.hstack([state_sequence[i-1], state_sequence[i]])))
+            density *= (self.GMM_s.gmm(state_sequence[i], add_offset=True) / self.GMM_c.gmm(np.hstack([state_sequence[i-1], state_sequence[i]]), add_offset=True))
 
         if density < tau:
             print('updating parameters...')
             self.dynamic_EM(state_sequence)
 
 
+    def sequence_freshness(self, states: np.ndarray, states_cond: np.ndarray):
+        '''Returns, in order, the density of the state sequence, the pdf of the states and the pdf of the concatenated states.'''
+        first_state = states[0]
+        first_state_pdf = self.GMM_s.gmm(first_state, add_offset=True)
+        density = np.sum(first_state_pdf)
+
+        # states
+        states_pdf = np.zeros((states.shape[0], self.k))
+        for i in range(states.shape[0]):
+           states_pdf[i] = self.GMM_s.gmm(states[i], add_offset=True)
+        # concatenated states
+        states_cond_pdf = np.zeros((states_cond.shape[0], self.k))
+        for i in range(states_cond.shape[0]):
+            states_cond_pdf[i] = self.GMM_c.gmm(states_cond[i], add_offset=True)
+            # density *= np.min([np.sum(states_cond_pdf[i]) / np.sum(states_pdf[i]), 1.0])
+            density *= (np.sum(states_cond_pdf[i]) / np.sum(states_pdf[i]))
+        return density, states_pdf, states_cond_pdf
+
+
+
     def dynamic_EM(self, state_sequence: List[np.ndarray]):
-        states_concatenated = np.array([np.hstack([state_sequence[i], state_sequence[i+1]] for i in range(len(state_sequence)))])
+        states_concatenated = self._concatenate_states(state_sequence)
 
         self.GMM_s.online_EM(state_sequence, self.gamma)
         self.GMM_c.online_EM(states_concatenated, self.gamma)
@@ -184,7 +247,6 @@ class CoverageModel():
 
 
 
-
 if __name__ == '__main__':
     test_rng: np.random.Generator = np.random.default_rng(0)
     k = 2
@@ -193,7 +255,7 @@ if __name__ == '__main__':
         [1, 1],
         [4, 4],
     ]
-    initial_data, fig, ax = generate_clustered_data(dim, k, cluster_means, num_points_per_cluster=1000, plot=True, spread_factor=0.05)
+    initial_data, fig, ax = generate_clustered_data(dim, k, cluster_means, num_points_per_cluster=1000, plot=True, spread_factor=0.05, rng=test_rng)
     shuffle_data = test_rng.permutation(initial_data)
     gmm_init_data = shuffle_data[:k]
     gmm = GMM(0, 2)
@@ -219,6 +281,11 @@ if __name__ == '__main__':
         plot_gaussians(gmm.means, gmm.covariances, ax, cmap_values=[0.42, 0.69])
         fig.savefig(f'imgs/iteration_{i}.png')
 
-    plot_gaussians(gmm.means, gmm.covariances, ax)
+    plot_gaussians(gmm.means, gmm.covariances, ax, cmap_values=[0.42, 0.69])
     fig.savefig('test_gmm.png')
-    create_gif('imgs', 'test_gmm.gif', duration=350)
+    create_gif('imgs', 'test_gmm.gif', duration=400)
+    gmm.save('test_save')
+    print(f'{gmm.log_likelihood(shuffle_data)}')
+    gmm2 = GMM(0, 2)
+    gmm2.load('test_save_config')
+    print(f'{gmm2.log_likelihood(shuffle_data)}')
