@@ -16,10 +16,10 @@ from typing import List, Tuple, Dict, Union
 # or runs python -m src.gmm
 if __package__ is None or __package__ == '':
     # uses current directory visibility
-    from utils import modify_covariance_matrix, plot_gaussians, generate_clustered_data, create_gif, remove_gaussian
+    from utils import modify_covariance_matrix, plot_gaussians, generate_clustered_data, create_gif, remove_gaussian, plot_points
 else:
     # uses current package visibility
-    from .utils import modify_covariance_matrix, plot_gaussians, generate_clustered_data, create_gif, remove_gaussian
+    from .utils import modify_covariance_matrix, plot_gaussians, generate_clustered_data, create_gif, remove_gaussian, plot_points
 
 
 class GMM():
@@ -27,6 +27,7 @@ class GMM():
     def __init__(self, random_seed: int, k: int):
         self.k = k
         self.dim: int = None
+        self.gamma: float = None
         self.random_seed = random_seed
         self.rng: np.random.Generator = np.random.default_rng(self.random_seed)
         self.normal = multivariate_normal
@@ -58,43 +59,74 @@ class GMM():
             self.cs_means[i] = self.means[i].copy() * self.coefficients[0]
 
 
-    def update_cs_statistics(self, point: np.ndarray, gamma: float):
-        # E step
-        responsibilities = np.zeros(self.k)
-        for i in range(self.k):
-            responsibilities[i] = self.coefficients[i] * self.normal.pdf(point, mean=self.means[i], cov=self.covariances[i])
-        # prevents numerical instability
-        responsibilities += 1e-5
-        responsibilities /= sum(responsibilities)
+    def set_gamma(self, gamma: float):
+        assert gamma > 0.0 and gamma < 1.0
+        self.gamma = gamma
 
-        # updates the weighted CS statistics with gamma
+
+    def get_cs_statistics(self, responsibilities: np.ndarray, point: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        '''Returns the mixing coefficients and CS statistics based on the responsibilities and the data provided.'''
         coefficients = np.ones(self.k)
         cs_means = np.zeros((self.k, self.dim))
         cs_squares = np.zeros((self.k, self.dim, self.dim))
         for i in range(self.k):
-            coefficients[i] = (1 - gamma) * self.coefficients[i] + gamma * responsibilities[i]
-            cs_means[i] = (1 - gamma) * self.cs_means[i] + gamma * responsibilities[i] * point
-            cs_squares[i] = (1 - gamma) * self.cs_squares[i] + gamma * responsibilities[i] * np.matmul(point[:, np.newaxis], point[:, np.newaxis].T)
+            coefficients[i] = (1 - self.gamma) * self.coefficients[i] + self.gamma * responsibilities[i]
+            cs_means[i] = (1 - self.gamma) * self.cs_means[i] + self.gamma * responsibilities[i] * point
+            cs_squares[i] = (1 - self.gamma) * self.cs_squares[i] + self.gamma * responsibilities[i] * np.matmul(point[:, np.newaxis], point[:, np.newaxis].T)
         return coefficients, cs_means, cs_squares
 
 
-    def online_EM(self, states: Union[np.ndarray, List[np.ndarray]], gamma: float, permute: bool = False):
+    def compute_cs_statistics(self, point: np.ndarray):
+        '''Computes the responsibilities and returns the updated coefficients and CS statistics based on the current parameters.'''
+        # E step
+        responsibilities = np.zeros(self.k)
+        for i in range(self.k):
+            responsibilities[i] = self.coefficients[i] * self.normal.pdf(point, mean=self.means[i], cov=self.covariances[i])
+        responsibilities += 1e-5
+        responsibilities /= sum(responsibilities)
+        return self.get_cs_statistics(responsibilities, point)
+
+
+    def update_parameters(self, coefficients: np.ndarray, cs_means: np.ndarray, cs_squares: np.ndarray):
+        '''Updates the means and covariances of the model with the coefficients and CS statistics provided.'''
+        for i in range(self.k):
+            self.means[i] = cs_means[i] / coefficients[i]
+            sigma = (cs_squares[i] - np.matmul(self.means[i][:, np.newaxis], cs_means[i][:, np.newaxis].T)) / coefficients[i]
+            # prevents numerical instability
+            self.covariances[i] = modify_covariance_matrix(sigma)
+
+
+    def update(self, point: np.ndarray, responsibilities: np.ndarray = None):
+        '''Updates the current parameters with the point provided.'''
+        if responsibilities is None:
+            coefficients, cs_means, cs_squares = self.compute_cs_statistics(point)
+        else:
+            coefficients, cs_means, cs_squares = self.get_cs_statistics(responsibilities, point)
+
+        self.coefficients = copy.deepcopy(coefficients)
+        self.cs_means = copy.deepcopy(cs_means)
+        self.cs_squares = copy.deepcopy(cs_squares)
+        self.update_parameters(coefficients, cs_means, cs_squares)
+
+
+    def online_EM(self, states: Union[np.ndarray, List[np.ndarray]], permute: bool = False, gamma: float = None):
+        '''
+        Online Expectation Maximization.
+        It first computes the new coefficients and CS stastistics, and then (deep) copies them and updates the means and covariances accordlingly.
+        '''
         if permute:
             states = self.rng.permutation(states)
+        if gamma is None:
+            assert self.gamma is not None
 
         for j in range(len(states) - 1):
             state = states[j]
 
-            coefficients, cs_means, cs_squares = self.update_cs_statistics(state, gamma)
-            self.coefficients = copy.deepcopy(coefficients) # new mixing coefficients
-            for i in range(self.k):
-                self.means[i] = cs_means[i] / coefficients[i]
-                sigma = (cs_squares[i] - np.matmul(self.means[i][:, np.newaxis], cs_means[i][:, np.newaxis].T)) / coefficients[i]
-                # prevents numerical instability
-                self.covariances[i] = modify_covariance_matrix(sigma)
-
+            coefficients, cs_means, cs_squares = self.compute_cs_statistics(state)
+            self.coefficients = copy.deepcopy(coefficients)
             self.cs_means = copy.deepcopy(cs_means)
             self.cs_squares = copy.deepcopy(cs_squares)
+            self.update_parameters(coefficients, cs_means, cs_squares)
 
 
     def save(self, filepath: str):
@@ -102,6 +134,7 @@ class GMM():
         configuration = dict()
         # attributes
         configuration['k'] = self.k
+        configuration['gamma'] = self.gamma
         configuration['random_seed'] = self.random_seed
         # along with the initial random seed and the states of the two random generators
         configuration['random_state'] = self.rng.bit_generator.state
@@ -119,6 +152,7 @@ class GMM():
 
     def _load_dict(self, configuration: Dict):
         self.k = configuration['k']
+        self.gamma = configuration['gamma']
         self.random_seed = configuration['random_seed']
 
         self.rng: np.random.Generator = np.random.default_rng(self.random_seed)
@@ -180,7 +214,9 @@ class CoverageModel():
         self.normal.random_state = np.random.default_rng(self.random_seed)
 
         self.GMM_s = GMM(self.random_seed, k)
+        self.GMM_s.set_gamma(gamma)
         self.GMM_c = GMM(self.random_seed, k)
+        self.GMM_c.set_gamma(gamma)
 
 
     def _concatenate_states(self, states: Union[np.ndarray, List[np.ndarray]], n: int = None) -> np.ndarray:
@@ -202,6 +238,11 @@ class CoverageModel():
 
 
     def sequence_freshness_sheer(self, state_sequence: List[np.ndarray], tau: float):
+        '''
+        ``Sheer version of the function, that strictly follows the algorithm.
+        As such, it is not optimized, mostly because the joint density probababilities can be computed twice.
+        Precisely, to first compute the density, and then during the online update of the GMMs.
+        '''
         first_state = state_sequence[0]
         density = self.GMM_s.gmm(first_state, add_offset=True)
         # indices are shifted compared to the definition
@@ -209,11 +250,11 @@ class CoverageModel():
             density *= (self.GMM_s.gmm(state_sequence[i], add_offset=True) / self.GMM_c.gmm(np.hstack([state_sequence[i-1], state_sequence[i]]), add_offset=True))
 
         if density < tau:
-            print('updating parameters...')
+            print('active dynamic EM')
             self.dynamic_EM(state_sequence)
 
 
-    def sequence_freshness(self, states: np.ndarray, states_cond: np.ndarray):
+    def sequence_freshness(self, states: np.ndarray, states_cond: np.ndarray, tau: float = None):
         '''Returns, in order, the density of the state sequence, the pdf of the states and the pdf of the concatenated states.'''
         first_state = states[0]
         first_state_pdf = self.GMM_s.gmm(first_state, add_offset=True)
@@ -229,28 +270,53 @@ class CoverageModel():
             states_cond_pdf[i] = self.GMM_c.gmm(states_cond[i], add_offset=True)
             # density *= np.min([np.sum(states_cond_pdf[i]) / np.sum(states_pdf[i]), 1.0])
             density *= (np.sum(states_cond_pdf[i]) / np.sum(states_pdf[i]))
-        return density, states_pdf, states_cond_pdf
+
+        if (tau is not None) and (density < tau):
+            self.dynamic_EM_passive(states, states_pdf, states_cond_pdf, states_cond)
+            print('GMMs updated!')
+
+        return density
 
 
 
-    def dynamic_EM(self, state_sequence: List[np.ndarray]):
-        states_concatenated = self._concatenate_states(state_sequence)
+    def dynamic_EM(self, state_sequence: List[np.ndarray], states_concatenated: np.ndarray = None):
+        '''Active version of the dynamic EM.'''
+        if states_concatenated is None:
+            states_concatenated = self._concatenate_states(state_sequence)
 
-        self.GMM_s.online_EM(state_sequence, self.gamma)
-        self.GMM_c.online_EM(states_concatenated, self.gamma)
+        self.GMM_s.online_EM(state_sequence)
+        self.GMM_c.online_EM(states_concatenated)
 
 
-    def save(self, filepath: str, parameters: List[Dict] = []):
+    def dynamic_EM_passive(self, state_seq: np.ndarray, pdf_s: np.ndarray, pdf_c: np.ndarray, state_seq_cond: np.ndarray = None):
+        '''Passive version of the dynamic EM which assumes pdf values have already been calculated.'''
+        if states_concatenated is None:
+            states_concatenated = self._concatenate_states(state_seq)
+
+        # the inputs are the probability density values, which thus need to be normalized
+        resp_s = pdf_s / np.sum(pdf_s, axis=1)
+        resp_c = pdf_c / np.sum(pdf_c, axis=1)
+
+        for (state_s, state_c) in zip(state_seq, state_seq_cond):
+            self.GMM_s.update(state_s, resp_s)
+            self.GMM_c.update(state_c, resp_c)
+
+        self.GMM_c.online_EM(states_concatenated)
+
+
+    def save(self, filepath: str):
         filepath = filepath.split('.json')[0]
         self.GMM_s.save(filepath + 's')
         self.GMM_c.save(filepath + 'c')
 
 
 
-if __name__ == '__main__':
+def test_gmm():
+    '''More or less the same as the unit tests.'''
     test_rng: np.random.Generator = np.random.default_rng(0)
     k = 2
     dim = 2
+    gamma = 0.01
     cluster_means = [
         [1, 1],
         [4, 4],
@@ -260,6 +326,7 @@ if __name__ == '__main__':
     gmm_init_data = shuffle_data[:k]
     gmm = GMM(0, 2)
     gmm.initialize(gmm_init_data)
+    gmm.set_gamma(gamma)
     plot_gaussians(gmm.means, gmm.covariances, ax, cmap_values=[0.42, 0.69])
     ax.set_xlim(ax.get_xlim())
     ax.set_ylim(ax.get_ylim())
@@ -273,7 +340,7 @@ if __name__ == '__main__':
     ll = [gmm.log_likelihood(shuffle_data)]
     for _ in tqdm.tqdm(range(num_iterations)):
         samples = shuffle_data[test_rng.choice(len(shuffle_data), size=batch_size)]
-        gmm.online_EM(samples, gamma=gamma)
+        gmm.online_EM(samples)
         ll.append(gmm.log_likelihood(shuffle_data))
 
         i += 1
@@ -281,11 +348,64 @@ if __name__ == '__main__':
         plot_gaussians(gmm.means, gmm.covariances, ax, cmap_values=[0.42, 0.69])
         fig.savefig(f'imgs/iteration_{i}.png')
 
-    plot_gaussians(gmm.means, gmm.covariances, ax, cmap_values=[0.42, 0.69])
-    fig.savefig('test_gmm.png')
     create_gif('imgs', 'test_gmm.gif', duration=400)
     gmm.save('test_save')
-    print(f'{gmm.log_likelihood(shuffle_data)}')
+    final_ll = gmm.log_likelihood(shuffle_data)
     gmm2 = GMM(0, 2)
     gmm2.load('test_save_config')
-    print(f'{gmm2.log_likelihood(shuffle_data)}')
+    print('Does save/load work:', np.array_equal(final_ll, gmm2.log_likelihood(shuffle_data)))
+
+
+def test_gmm_4D():
+    test_rng: np.random.Generator = np.random.default_rng(0)
+    k = 2
+    dim = 2
+    # fails with gamma = 0.01
+    # gamma = 0.01
+    gamma = 0.05
+    cluster_means = [
+        [1, 1],
+        [4, 4],
+    ]
+    initial_data, fig, ax = generate_clustered_data(dim, k, cluster_means, num_points_per_cluster=1000, plot=True, spread_factor=0.05, rng=test_rng)
+    shuffle_data = test_rng.permutation(initial_data)
+
+    def concatenate_data(data: np.ndarray) -> np.ndarray:
+        data_concat = []
+        for i in range(len(data) - 1):
+            data_concat.append(np.hstack([data[i], data[i+1]]))
+        return np.array(data_concat)
+
+    concat_data = concatenate_data(shuffle_data)
+
+    from sklearn.cluster import KMeans
+
+    training_data = concat_data
+    kmeans = KMeans(n_clusters=4, random_state=0).fit(training_data)
+
+    gmm = GMM(0, 4)
+    gmm.set_gamma(gamma)
+    gmm.initialize(concat_data[:4])
+    num_iterations = 20
+    batch_size = 500
+    ll = [gmm.log_likelihood(concat_data)]
+    i = 0
+    for _ in tqdm.tqdm(range(num_iterations)):
+        samples = concat_data[test_rng.choice(len(concat_data), size=batch_size)]
+        gmm.online_EM(samples)
+        ll.append(gmm.log_likelihood(concat_data))
+        i += 1
+
+    fig, ax = plt.subplots()
+    color = 'blue'
+    plot_points(ax, ll, color=color, step=2)
+    ax.set_title('Evolution of the log likelihood of the model for the training data')
+    fig.savefig('test_gmm_4D.png')
+    print('K means oracles found:')
+    print(kmeans.cluster_centers_)
+    print('Model found:')
+    print(gmm.means)
+
+if __name__ == '__main__':
+    # test_gmm()
+    test_gmm_4D()

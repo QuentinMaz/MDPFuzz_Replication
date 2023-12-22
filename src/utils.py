@@ -234,8 +234,9 @@ def log_likelihood(data: np.ndarray, coefficients, means, covariances):
     return sum(log_likelihoods)
 
 
-def create_gif(folder_path: str, output_gif_name: str = 'output.gif', duration: int = 100) -> None:
-    png_files = [file for file in os.listdir(folder_path) if file.lower().endswith('.png')]
+def create_gif(folder_path: str, output_gif_name: str = 'output.gif', duration: int = 100, prefix: str = '') -> None:
+    prefix = prefix.lower()
+    png_files = [file for file in os.listdir(folder_path) if (file.lower().endswith('.png')) and (file.lower().startswith(prefix))]
     png_files.sort()
 
     images = []
@@ -279,5 +280,5 @@ def plot_points(ax, data: Union[np.ndarray, List[np.ndarray]], **kwargs):
     ax.plot(x, data, color=color)
     for j, l in enumerate(data):
         ax.plot(j, l, marker='o', markersize=8, markeredgecolor=color, markerfacecolor=color)
-    ax.set_xticks(x, step=step)
+    ax.set_xticks(np.arange(len(data), step=step))
     return ax
