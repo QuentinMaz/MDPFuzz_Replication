@@ -266,7 +266,7 @@ class CoverageModel():
         self.GMM_c.initialize(states_concatenated)
 
 
-    def sequence_freshness_sheer(self, state_sequence: List[np.ndarray], tau: float):
+    def sequence_freshness_sheer(self, state_sequence: List[np.ndarray], tau: float = None):
         '''
         ``Sheer'' version of the function, that strictly follows the algorithm.
         As such, it is not optimized, mostly because the joint density probababilities can be computed twice.
@@ -278,8 +278,7 @@ class CoverageModel():
         for i in range(1, len(state_sequence)):
             density *= (self.GMM_s.gmm(state_sequence[i], add_offset=True) / self.GMM_c.gmm(np.hstack([state_sequence[i-1], state_sequence[i]]), add_offset=True))
 
-        if density < tau:
-            print('active dynamic EM')
+        if (tau is not None) and (density < tau):
             self.dynamic_EM(state_sequence)
 
 
@@ -358,9 +357,13 @@ class CoverageModel():
 
     def save(self, filepath: str):
         filepath = filepath.split('.json')[0]
-        self.GMM_s.save(filepath + 's')
-        self.GMM_c.save(filepath + 'c')
+        self.GMM_s.save(filepath + '_s')
+        self.GMM_c.save(filepath + '_c')
 
+
+    def load(self, filepath: str):
+        self.GMM_s.load(filepath + '_s_config')
+        self.GMM_c.load(filepath + '_c_config')
 
 
 def test_online_gmm(**kwargs):
@@ -490,8 +493,8 @@ if __name__ == '__main__':
     k = 2
     dim = 2
     gamma = 0.05
-    num_iterations = 75
-    batch_size = 50
+    num_iterations = 100
+    batch_size = 40
     cluster_means = [
         [1, 1],
         [4, 4],
@@ -526,7 +529,7 @@ if __name__ == '__main__':
         ll_c.append(cov_model.GMM_c.log_likelihood(concat_data))
 
 
-    print('densities:', densities)
+    # print('densities:', densities)
 
     color = 'blue'
     fig, ax = plt.subplots()
@@ -539,7 +542,27 @@ if __name__ == '__main__':
     ax.set_title('LL of GMM_c')
     fig.savefig('test_gmm_c.png')
 
+    fig, ax = plt.subplots()
+    ax.plot(np.arange(len(densities)), densities)
+    ax.set_title('Densities')
+    fig.savefig('densities.png')
+
     print('----- Final Means -------')
     print(cov_model.GMM_s.means)
     print('-------------------')
     print(cov_model.GMM_c.means)
+
+    cov_model.save('cov_model')
+    # cov_model.load('cov_model')
+    # eval_densities = []
+    # n_evals = 1000
+    # m_eval = 10
+    # for _ in tqdm.tqdm(range(n_evals)):
+    #     indices = test_rng.choice(len(concat_data), size=m_eval)
+    #     samples = shuffle_data[indices]
+    #     samples_c = concat_data[indices]
+    #     eval_densities.append(cov_model.sequence_freshness(samples, samples_c, tau=None))
+    # fig, ax = plt.subplots()
+    # ax.plot(np.arange(len(eval_densities)), eval_densities)
+    # ax.set_title(f'Densities of state sequences of length {m_eval}')
+    # fig.savefig(f'eval_densities_load_{m_eval}.png')
