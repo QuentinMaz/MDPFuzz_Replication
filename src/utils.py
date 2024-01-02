@@ -250,8 +250,7 @@ def create_gif(folder_path: str, output_gif_name: str = 'output.gif', duration: 
         output_gif_name,
         save_all=True,
         append_images=images[1:],
-        duration=duration,
-        loop=0
+        duration=duration
     )
 
 def plot_points(ax, data: Union[np.ndarray, List[np.ndarray]], **kwargs):
@@ -269,6 +268,7 @@ def plot_points(ax, data: Union[np.ndarray, List[np.ndarray]], **kwargs):
      **kwargs: Additional keyword arguments.
         - color (str, optional): The color for the line and the markers. Default to blue.
         - step (int, optional): The step for the x ticks. Default to 1.
+        - markersize (int, optional): The size of the points. Default to 8.
     Returns:
     --------
     matplotlib.axes.Axes
@@ -276,9 +276,10 @@ def plot_points(ax, data: Union[np.ndarray, List[np.ndarray]], **kwargs):
     '''
     color = kwargs.get('color', 'blue')
     step = kwargs.get('step', 1)
+    markersize = kwargs.get('markersize', 8)
     x = np.arange(len(data))
     ax.plot(x, data, color=color)
     for j, l in enumerate(data):
-        ax.plot(j, l, marker='o', markersize=8, markeredgecolor=color, markerfacecolor=color)
+        ax.plot(j, l, marker='o', markersize=markersize, markeredgecolor=color, markerfacecolor=color)
     ax.set_xticks(np.arange(len(data), step=step))
     return ax
