@@ -22,6 +22,10 @@ else:
     from .utils import modify_covariance_matrix, plot_gaussians, generate_clustered_data, create_gif, remove_gaussian, plot_points
 
 
+# float64; 1E3 for float32
+TMP = 1E6 * np.finfo('d').eps
+
+
 class GMM():
     '''CS statistics are weighted.'''
     def __init__(self, random_seed: int, k: int):
@@ -38,6 +42,8 @@ class GMM():
         self.covariances: np.ndarray = None
         self.cs_means: np.ndarray = None
         self.cs_squares: np.ndarray = None
+
+        self.allow_singular = True
 
 
     def initialize(self, data: np.ndarray):
@@ -81,7 +87,7 @@ class GMM():
         # E step
         responsibilities = np.zeros(self.k)
         for i in range(self.k):
-            responsibilities[i] = self.coefficients[i] * self.normal.pdf(point, mean=self.means[i], cov=self.covariances[i])
+            responsibilities[i] = self.coefficients[i] * self.normal.pdf(point, mean=self.means[i], cov=self.covariances[i], allow_singular=self.allow_singular)
         responsibilities += 1e-5
         responsibilities /= sum(responsibilities)
         return self.get_cs_statistics(responsibilities, point)
@@ -121,7 +127,6 @@ class GMM():
 
         for j in range(len(states) - 1):
             state = states[j]
-
             coefficients, cs_means, cs_squares = self.compute_cs_statistics(state)
             self.coefficients = copy.deepcopy(coefficients)
             self.cs_means = copy.deepcopy(cs_means)
@@ -138,7 +143,7 @@ class GMM():
         z = np.zeros((num_states, self.k))
         # E step
         for i in range(self.k):
-            z[:, i] = self.coefficients[i] * self.normal.pdf(states, mean=self.means[i], cov=self.covariances[i])
+            z[:, i] = self.coefficients[i] * self.normal.pdf(states, mean=self.means[i], cov=self.covariances[i], allow_singular=self.allow_singular)
         z /= np.sum(z, axis=1, keepdims=True)
         # M step
         sum_z = np.sum(z, axis=0)
@@ -164,6 +169,7 @@ class GMM():
         # attributes
         configuration['k'] = self.k
         configuration['gamma'] = self.gamma
+        configuration['dim'] = self.dim
         configuration['random_seed'] = self.random_seed
         # along with the initial random seed and the states of the two random generators
         configuration['random_state'] = self.rng.bit_generator.state
@@ -182,6 +188,7 @@ class GMM():
     def _load_dict(self, configuration: Dict):
         self.k = configuration['k']
         self.gamma = configuration['gamma']
+        self.dim = configuration['dim']
         self.random_seed = configuration['random_seed']
 
         self.rng: np.random.Generator = np.random.default_rng(self.random_seed)
@@ -207,14 +214,14 @@ class GMM():
 
     def log_likelihood(self, data: np.ndarray):
         if len(data.shape) == 1:
-            return np.log(sum([self.coefficients[i] * self.normal.pdf(data, mean=self.means[i], cov=self.covariances[i]) for i in range(self.k)]))
+            return np.log(sum([self.coefficients[i] * self.normal.pdf(data, mean=self.means[i], cov=self.covariances[i], allow_singular=self.allow_singular) for i in range(self.k)]))
         # data is an array of points
         else:
             log_likelihoods = []
             for x in data:
                 tmp = 0.0
                 for i in range(self.k):
-                    tmp += self.coefficients[i] * self.normal.pdf(x, mean=self.means[i], cov=self.covariances[i])
+                    tmp += self.coefficients[i] * self.normal.pdf(x, mean=self.means[i], cov=self.covariances[i], allow_singular=self.allow_singular)
                 log_likelihoods.append(np.log(tmp))
             return sum(log_likelihoods)
 
@@ -222,19 +229,27 @@ class GMM():
     def gmm(self, state: np.ndarray, add_offset: bool = True) -> np.ndarray:
         pdf = np.zeros(self.k)
         for i in range(self.k):
-            pdf[i] = self.coefficients[i] * self.normal.pdf(state, mean=self.means[i], cov=self.covariances[i])
+            pdf[i] = self.coefficients[i] * self.normal.pdf(state, mean=self.means[i], cov=self.covariances[i], allow_singular=self.allow_singular)
         if add_offset:
             pdf += 1e-5
         return pdf
 
 
+    def _is_numerically_singular(self, matrix: np.ndarray):
+        '''Mimics how scipy checks numerically singular matrices.'''
+        eighen_values = np.linalg.eigh(matrix)[0]
+        eps = TMP * np.max(abs(eighen_values))
+        return np.all(eighen_values > eps) == False
+
+
 class CoverageModel():
-    def __init__(self, random_seed: int, k: int, gamma: float) -> None:
+    def __init__(self, random_seed: int, k: int, gamma: float, k_c: int = None) -> None:
         assert k > 0
         assert gamma > 0.0 and gamma < 1.0
 
-        self.k = k
         self.gamma = gamma
+        self.k_s = k
+        self.k_c = k_c if k_c is not None else k
 
         # random generators
         self.random_seed = random_seed
@@ -242,9 +257,9 @@ class CoverageModel():
         self.normal = multivariate_normal
         self.normal.random_state = np.random.default_rng(self.random_seed)
 
-        self.GMM_s = GMM(self.random_seed, k)
+        self.GMM_s = GMM(self.random_seed, self.k_s)
         self.GMM_s.set_gamma(gamma)
-        self.GMM_c = GMM(self.random_seed, 2 * k)
+        self.GMM_c = GMM(self.random_seed, self.k_c)
         self.GMM_c.set_gamma(gamma)
 
 
@@ -252,16 +267,15 @@ class CoverageModel():
         if n is None:
             n = len(states)
         else:
-            assert n > 1 and (n <= len(states) - 1)
+            assert n > 0 and (n <= len(states) - 1) # n > 0 in case K=1
         return np.array([np.hstack([states[i], states[i+1]]) for i in range(n)])
 
 
     def initialize(self, states: List[np.ndarray]):
         '''Initializes the GMMs\' parameters and the CS statistics.'''
-        # assert len(states) == self.k + 1
 
-        self.GMM_s.initialize(np.array(states[:k]))
-        states_concatenated = self._concatenate_states(states, n=(2*self.k))
+        self.GMM_s.initialize(np.array(states[:self.k_s]))
+        states_concatenated = self._concatenate_states(states, n=self.k_c)
         print(f'concatenated states of shape {states_concatenated.shape}')
         self.GMM_c.initialize(states_concatenated)
 
@@ -289,19 +303,17 @@ class CoverageModel():
         density = np.sum(first_state_pdf)
 
         # states
-        states_pdf = np.zeros((states.shape[0], self.k))
+        states_pdf = np.zeros((states.shape[0], self.k_s))
         for i in range(states.shape[0]):
            states_pdf[i] = self.GMM_s.gmm(states[i], add_offset=True)
         # concatenated states
-        states_cond_pdf = np.zeros((states_cond.shape[0], 2 * self.k))
+        states_cond_pdf = np.zeros((states_cond.shape[0], self.k_c))
         for i in range(states_cond.shape[0]):
             states_cond_pdf[i] = self.GMM_c.gmm(states_cond[i], add_offset=True)
-            # density *= np.min([np.sum(states_cond_pdf[i]) / np.sum(states_pdf[i]), 1.0])
             density *= (np.sum(states_cond_pdf[i]) / np.sum(states_pdf[i]))
 
-        if (tau is not None) and (density < tau):
+        if tau is None or ((tau is not None) and (density < tau)):
             self.dynamic_EM(states, states_cond)
-
         return density
 
 
@@ -324,15 +336,12 @@ class CoverageModel():
         first_state_pdf = self.GMM_s.gmm(first_state, add_offset=True)
         density = np.sum(first_state_pdf)
 
-        # states
-        states_pdf = np.zeros((states.shape[0], self.k))
+        states_pdf = np.zeros((states.shape[0], self.k_s))
         for i in range(states.shape[0]):
            states_pdf[i] = self.GMM_s.gmm(states[i], add_offset=True)
-        # concatenated states
-        states_cond_pdf = np.zeros((states_cond.shape[0], 2 * self.k))
+        states_cond_pdf = np.zeros((states_cond.shape[0], self.k_c))
         for i in range(states_cond.shape[0]):
             states_cond_pdf[i] = self.GMM_c.gmm(states_cond[i], add_offset=True)
-            # density *= np.min([np.sum(states_cond_pdf[i]) / np.sum(states_pdf[i]), 1.0])
             density *= (np.sum(states_cond_pdf[i]) / np.sum(states_pdf[i]))
 
         if (tau is not None) and (density < tau):
@@ -364,6 +373,16 @@ class CoverageModel():
     def load(self, filepath: str):
         self.GMM_s.load(filepath + '_s_config')
         self.GMM_c.load(filepath + '_c_config')
+
+
+    def cover_state_sequence(self, n: int, state_sequence: np.ndarray, state_sequence_conc: np.ndarray = None):
+        if state_sequence_conc is None:
+            state_sequence_conc = self._concatenate_states(state_sequence)
+
+        coverages = [self.sequence_freshness(state_sequence, state_sequence_conc, tau=None)]
+        for _ in tqdm.tqdm(range(n)):
+            coverages.append(self.sequence_freshness(state_sequence, state_sequence_conc, tau=None))
+        return coverages
 
 
 def test_online_gmm(**kwargs):

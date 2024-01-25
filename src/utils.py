@@ -53,6 +53,11 @@ def modify_covariance_matrix(covariance_matrix: np.ndarray):
     return reconstructed_matrix
 
 
+def modify_covariance_matrix2(covariance_matrix: np.ndarray):
+    '''A lighter version.'''
+    return covariance_matrix + np.eye(len(covariance_matrix)) * 1e-3
+
+
 def generate_clustered_data(
     num_dimensions: int,
     num_clusters: int,
@@ -252,6 +257,7 @@ def create_gif(folder_path: str, output_gif_name: str = 'output.gif', duration: 
         append_images=images[1:],
         duration=duration
     )
+
 
 def plot_points(ax, data: Union[np.ndarray, List[np.ndarray]], **kwargs):
     '''
