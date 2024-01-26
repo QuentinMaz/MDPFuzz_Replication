@@ -239,12 +239,13 @@ class Fuzzer():
             policy = kwargs.get('policy', None)
             random_input = kwargs.get('input', self.sampling())
             reward, crash, state_sequence, exec_time = self.mdp(random_input, policy)
-            kwargs['exec_counter'] = exec_counter + 1
+            exec_counter += 1
             if self.logger is not None:
                 self.logger.log(input=random_input, oracle=crash, reward=reward, test_exec_time=exec_time, run_time=time.time())
 
         # it needs at least k + 1 states (for gmm_c)
         if len(state_sequence) < self.k + 1:
+            kwargs['exec_counter'] = exec_counter
             return self.initialize_coverage_model(**kwargs)
         else:
             self.coverage_model.initialize(state_sequence)
