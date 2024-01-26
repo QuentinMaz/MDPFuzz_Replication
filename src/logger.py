@@ -44,7 +44,7 @@ class FuzzerLogger:
             'coverage': str(coverage) if coverage is not None else 'None'
         }
 
-        # ensures good ordering by using the columns (weakness found when Python version is 3.5)
+        # ensures correct ordering by using the columns (weakness found when Python version is 3.5)
         log_line = self.delimiter.join([log_data[k] for k in self.columns])
 
         with open(self.filepath, 'a') as file:
@@ -82,8 +82,11 @@ class FuzzerLogger:
 
 if __name__ == '__main__':
     import os
-    log_file_example_path = 'log_example.txt'
-    if os.path.isfile(log_file_example_path):
-        logger = FuzzerLogger(log_file_example_path)
-        df = logger.load_logs()
-        print(df)
+    log_file_example_path = 'log_file_example.txt'
+    if not os.path.isfile(log_file_example_path):
+        log_file_example_path = 'tests/' + log_file_example_path
+    assert os.path.isfile(log_file_example_path), 'Log file example has been moved.'
+
+    logger = FuzzerLogger(log_file_example_path)
+    df = logger.load_logs()
+    print(df.head(10))
