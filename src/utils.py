@@ -129,14 +129,14 @@ def generate_clustered_data(
             for i in range(num_clusters):
                 ax.scatter(generated_data[i * num_points_per_cluster: (i + 1) * num_points_per_cluster, 0],
                            generated_data[i * num_points_per_cluster: (i + 1) * num_points_per_cluster, 1],
-                           label=f'Mean: {cluster_means[i]}', s=20)
+                           label='Mean: {}'.format(cluster_means[i]), s=20)
         elif num_dimensions == 3:
             ax = fig.add_subplot(111, projection='3d')
             for i in range(num_clusters):
                 ax.scatter(generated_data[i * num_points_per_cluster: (i + 1) * num_points_per_cluster, 0],
                            generated_data[i * num_points_per_cluster: (i + 1) * num_points_per_cluster, 1],
                            generated_data[i * num_points_per_cluster: (i + 1) * num_points_per_cluster, 2],
-                           label=f'Mean: {cluster_means[i]}', s=20)
+                           label='Mean: {}'.format(cluster_means[i]), s=20)
         if legend:
             ax.legend()
         fig.tight_layout()

@@ -21,15 +21,15 @@ else:
 class Pool():
     '''Compared to the paper, the pool features the storage of crashes, which correspond to failure-triggering states/inputs.'''
     def __init__(self, is_integer: bool = False) -> None:
-        self.inputs: List[np.ndarray] = []
-        self.rewards: List[float] = []
-        self.oracles: List[int] = []
-        self.sensitivities: List[float] = []
-        self.coverages: List[float] = []
-        self.indices: List[str] = []
-        self.added: List[int] = [] # tracks insertion in the pool
-        self.selected: List[int] = [] # tracks selection in the pool
-        self.crashes: List[np.ndarray] = []
+        self.inputs = [] # type: List[np.ndarray]
+        self.rewards = [] # type: List[float]
+        self.oracles = [] # type: List[int]
+        self.sensitivities = [] # type: List[float]
+        self.coverages = [] # type: List[float]
+        self.indices = [] # type: List[str]
+        self.added = [] # type: List[int]
+        self.selected = [] # type: List[int]
+        self.crashes = [] # type: List[np.ndarray]
 
         self.delimiter = ' '
         self.is_integer = is_integer
@@ -38,7 +38,7 @@ class Pool():
     def _key(self, input: np.ndarray) -> str:
         '''Returns the "key" format of an input.'''
         if self.is_integer:
-            return self.delimiter.join([f'{i:.0f}' for i in input])
+            return self.delimiter.join(['{:.0f}'.format(i) for i in input])
         else:
             return self.delimiter.join([str(i) for i in input])
 
@@ -147,7 +147,7 @@ class Fuzzer():
 
         # random generators
         self.random_seed = random_seed
-        self.rng: np.random.Generator = np.random.default_rng(self.random_seed)
+        self.rng  = np.random.default_rng(self.random_seed) # type: np.random.Generator
 
         # coverage model (composed of 2 GMMS)
         self.coverage_model = CoverageModel(random_seed, k, gamma)
@@ -480,7 +480,7 @@ class Fuzzer():
         self._load_dict(config)
         if os.path.isfile(path + '_evaluations.txt'):
             self.load_evaluated_solutions(path + '_evaluations.txt')
-            print(f'found {len(self.evaluated_solutions)} evaluated solutions.')
+            print('found {} evaluated solutions.'.format(len(self.evaluated_solutions)))
 
 
     def _load_dict(self, configuration: Dict):
@@ -488,7 +488,7 @@ class Fuzzer():
         self.gamma = configuration['gamma']
         self.random_seed = configuration['random_seed']
         self.env_seed = configuration['env_seed']
-        self.rng: np.random.Generator = np.random.default_rng(self.random_seed)
+        self.rng  = np.random.default_rng(self.random_seed) # type: np.random.Generator
         self.rng.bit_generator.state = configuration['random_state']
 
 

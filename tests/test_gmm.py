@@ -11,7 +11,7 @@ def input_data():
     gamma = 0.01
     means = [[1, 1], [4, 4]]
     cmap_values = [0.25, 0.55]
-    test_rng: np.random.Generator = np.random.default_rng(42)
+    test_rng = np.random.default_rng(42) # type: np.random.Generator
     initial_data, fig, ax = generate_clustered_data(
         dim,
         k,
@@ -43,7 +43,7 @@ def input_data():
 def test_initialize(input_data):
     rng = input_data['rng']
     data_shuffled = rng.permutation(input_data['initial_data'])
-    gmm: GMM = input_data['gmm']
+    gmm = input_data['gmm'] # type: GMM
     gmm.initialize(data_shuffled[:input_data['k']])
 
     assert True
@@ -61,7 +61,7 @@ def test_initialize(input_data):
 def test_online_gmm(input_data):
     rng = input_data['rng']
     data_shuffled = rng.permutation(input_data['initial_data'])
-    gmm: GMM = input_data['gmm']
+    gmm = input_data['gmm'] # type: GMM
     ll = [gmm.log_likelihood(data_shuffled)]
 
     m = len(data_shuffled)
@@ -79,7 +79,7 @@ def test_online_gmm(input_data):
         ll.append(gmm.log_likelihood(data_shuffled))
         remove_gaussian(ax)
         plot_gaussians(gmm.means, gmm.covariances, ax, cmap_values=input_data['colors'])
-        fig.savefig(f'imgs/iteration_{i}.png')
+        fig.savefig('imgs/iteration_{}.png'.format(i))
 
     # dirty
     remove_gaussian(ax)

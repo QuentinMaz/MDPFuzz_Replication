@@ -30,18 +30,18 @@ class GMM():
     '''CS statistics are weighted.'''
     def __init__(self, random_seed: int, k: int):
         self.k = k
-        self.dim: int = None
-        self.gamma: float = None
+        self.dim = None # type: int
+        self.gamma = None # type: float
         self.random_seed = random_seed
-        self.rng: np.random.Generator = np.random.default_rng(self.random_seed)
+        self.rng = np.random.default_rng(self.random_seed) # type: np.random.Generator
         self.normal = multivariate_normal
         self.normal.random_state = np.random.default_rng(self.random_seed)
 
-        self.coefficients: np.ndarray = None
-        self.means: np.ndarray = None
-        self.covariances: np.ndarray = None
-        self.cs_means: np.ndarray = None
-        self.cs_squares: np.ndarray = None
+        self.coefficients = None # type: np.ndarray
+        self.means = None # type: np.ndarray
+        self.covariances = None # type: np.ndarray
+        self.cs_means = None # type: np.ndarray
+        self.cs_squares = None # type: np.ndarray
 
         self.allow_singular = True
 
@@ -52,13 +52,13 @@ class GMM():
         Means are weighted.
         '''
         assert len(data) == self.k
-        self.dim: int = data.shape[1]
-        self.coefficients: np.ndarray = np.ones(self.k) / self.k
-        self.means: np.ndarray = copy.deepcopy(data)
+        self.dim = data.shape[1] # type: int
+        self.coefficients = np.ones(self.k) / self.k
+        self.means = copy.deepcopy(data)
 
-        self.covariances: np.ndarray = np.zeros((self.k, self.dim, self.dim))
-        self.cs_means: np.ndarray = np.zeros((self.k, self.dim))
-        self.cs_squares: np.ndarray = np.zeros((self.k, self.dim, self.dim))
+        self.covariances = np.zeros((self.k, self.dim, self.dim))
+        self.cs_means = np.zeros((self.k, self.dim))
+        self.cs_squares = np.zeros((self.k, self.dim, self.dim))
         for i in range(self.k):
             self.covariances[i] = np.eye(self.dim)
             self.cs_squares[i] = np.matmul(data[i:i+1].T, data[i:i+1]) * self.coefficients[i]
@@ -102,7 +102,7 @@ class GMM():
             self.covariances[i] = modify_covariance_matrix(sigma)
 
 
-    def update(self, point: np.ndarray, responsibilities: np.ndarray = None):
+    def update(self, point: np.ndarray, responsibilities = None):
         '''Updates the current parameters with the point provided.'''
         if responsibilities is None:
             coefficients, cs_means, cs_squares = self.compute_cs_statistics(point)
@@ -191,7 +191,7 @@ class GMM():
         self.dim = configuration['dim']
         self.random_seed = configuration['random_seed']
 
-        self.rng: np.random.Generator = np.random.default_rng(self.random_seed)
+        self.rng = np.random.default_rng(self.random_seed) # type: np.random.Generator
         self.rng.bit_generator.state = configuration['random_state']
         self.normal = multivariate_normal
         self.normal.random_state = np.random.default_rng(self.random_seed)
@@ -253,7 +253,7 @@ class CoverageModel():
 
         # random generators
         self.random_seed = random_seed
-        self.rng: np.random.Generator = np.random.default_rng(self.random_seed)
+        self.rng = np.random.default_rng(self.random_seed) # type: np.random.Generator
         self.normal = multivariate_normal
         self.normal.random_state = np.random.default_rng(self.random_seed)
 
@@ -276,7 +276,7 @@ class CoverageModel():
 
         self.GMM_s.initialize(np.array(states[:self.k_s]))
         states_concatenated = self._concatenate_states(states, n=self.k_c)
-        print(f'concatenated states of shape {states_concatenated.shape}')
+        print('concatenated states of shape {}'.format(states_concatenated.shape))
         self.GMM_c.initialize(states_concatenated)
 
 
@@ -317,7 +317,7 @@ class CoverageModel():
         return density
 
 
-    def dynamic_EM(self, state_sequence: List[np.ndarray], states_concatenated: np.ndarray = None):
+    def dynamic_EM(self, state_sequence: List[np.ndarray], states_concatenated = None):
         '''Active version of the dynamic EM by calling the online_EM function of the GMM models.'''
         if states_concatenated is None:
             states_concatenated = self._concatenate_states(state_sequence)
@@ -350,7 +350,7 @@ class CoverageModel():
         return density
 
 
-    def dynamic_EM_passive(self, state_seq: np.ndarray, pdf_s: np.ndarray, pdf_c: np.ndarray, state_seq_cond: np.ndarray = None):
+    def dynamic_EM_passive(self, state_seq: np.ndarray, pdf_s: np.ndarray, pdf_c: np.ndarray, state_seq_cond = None):
         '''Passive version of the dynamic EM which assumes pdf values have already been calculated.'''
         if state_seq_cond is None:
             state_seq_cond = self._concatenate_states(state_seq)
@@ -375,7 +375,7 @@ class CoverageModel():
         self.GMM_c.load(filepath + '_c_config')
 
 
-    def cover_state_sequence(self, n: int, state_sequence: np.ndarray, state_sequence_conc: np.ndarray = None):
+    def cover_state_sequence(self, n: int, state_sequence: np.ndarray, state_sequence_conc = None):
         if state_sequence_conc is None:
             state_sequence_conc = self._concatenate_states(state_sequence)
 
@@ -387,7 +387,7 @@ class CoverageModel():
 
 def test_online_gmm(**kwargs):
     '''More or less the same as the unit tests.'''
-    test_rng: np.random.Generator = np.random.default_rng(0)
+    test_rng = np.random.default_rng(0) # type: np.random.Generator
     k = 2
     dim = 2
     num_iterations = kwargs.get('num_iterations', 10)
@@ -416,7 +416,7 @@ def test_online_gmm(**kwargs):
     ax.set_ylim((-2.961636908743682, 5.903138354379044))
 
     i = 0
-    ax.set_title(f'Iteration: {i}')
+    ax.set_title('Iteration: {}'.format(i))
     fig.tight_layout()
 
     ll = [gmm.log_likelihood(shuffle_data)]
@@ -426,9 +426,9 @@ def test_online_gmm(**kwargs):
         ll.append(gmm.log_likelihood(shuffle_data))
 
         remove_gaussian(ax)
-        ax.set_title(f'Iteration: {i}')
+        ax.set_title('Iteration: {}'.format(i))
         plot_gaussians(gmm.means, gmm.covariances, ax, cmap_values=[0.42, 0.69])
-        fig.savefig(f'imgs/iteration_{i:02d}.png')
+        fig.savefig('imgs/iteration_{:02d}.png'.format(i))
         i += 1
 
     create_gif('imgs', 'test_online_gmm.gif', duration=400, prefix='iteration')
@@ -445,7 +445,7 @@ def test_online_gmm(**kwargs):
 
 
 def test_gmm_4D():
-    test_rng: np.random.Generator = np.random.default_rng(0)
+    test_rng = np.random.default_rng(0) # type: np.random.Generator
     k = 2
     dim = 2
     # fails with gamma = 0.01
@@ -467,10 +467,7 @@ def test_gmm_4D():
 
     concat_data = concatenate_data(shuffle_data)
 
-    from sklearn.cluster import KMeans
-
-    training_data = concat_data
-    kmeans = KMeans(n_clusters=4, random_state=0).fit(training_data)
+    centers = [[1, 1], [4, 4], [4, 1], [1, 4]]
 
     gmm = GMM(0, 4)
     gmm.set_gamma(gamma)
@@ -489,7 +486,7 @@ def test_gmm_4D():
     ax.set_title('Evolution of the log likelihood of the model for the training data')
     fig.savefig('test_gmm_4D.png')
     print('K means oracles found:')
-    print(kmeans.cluster_centers_)
+    print(centers)
     print('Model found:')
     print(gmm.means)
 
@@ -508,7 +505,7 @@ if __name__ == '__main__':
         # test_gmm_4D()
         exit(10)
 
-    test_rng: np.random.Generator = np.random.default_rng(0)
+    test_rng = np.random.default_rng(0) # type: np.random.Generator
     k = 2
     dim = 2
     gamma = 0.05
