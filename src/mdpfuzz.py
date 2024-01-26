@@ -17,6 +17,7 @@ else:
     from .logger import FuzzerLogger
     from .executor import Executor
 
+
 class Pool():
     '''Compared to the paper, the pool features the storage of crashes, which correspond to failure-triggering states/inputs.'''
     def __init__(self, is_integer: bool = False) -> None:
@@ -190,18 +191,18 @@ class Fuzzer():
         return mutate_states
 
 
-    def mdp(self, state: np.ndarray, policy: Any = None) -> Tuple[float, bool, np.ndarray]:
+    def mdp(self, state: np.ndarray, policy: Any = None) -> Tuple[float, bool, np.ndarray, float]:
         '''Returns the accumulated reward, whether a crash is detected and the state sequence.'''
-        episode_reward, done, obs_seq, _exec_time = self.executor.execute_policy(state, policy)
-        return episode_reward, done, obs_seq
+        episode_reward, done, obs_seq, exec_time = self.executor.execute_policy(state, policy)
+        return episode_reward, done, obs_seq, exec_time
 
 
-    def sentivity(self, state: np.ndarray, acc_reward: float = None, policy: Any = None) -> Tuple[float, float, bool, List[np.ndarray]]:
+    def sentivity(self, state: np.ndarray, acc_reward: float = None, policy: Any = None) -> Tuple[float, float, bool, List[np.ndarray], float]:
         '''
         Computes the sensitivity of the state @state.
         It first perturbs the state and computes the perturbation quantity.
         Then, the two states are executed and the sensitivity is computed.
-        It returns the latter, as well as the results of the execution for the state (acc. reward, sequence and oracle).
+        It returns the latter, as well as the results of the execution for the state (acc. reward, sequence, oracle and execution time).
         '''
         # perturbs the state and computes the perturbation
         perturbed_state = self.mutate_validate(state)
@@ -209,19 +210,20 @@ class Fuzzer():
 
         # runs the two states if no accumulated reward is provided
         if acc_reward is None:
-            acc_reward, crash, state_sequence = self.mdp(state, policy)
+            acc_reward, crash, state_sequence, exec_time = self.mdp(state, policy)
         else:
             state_sequence = []
             crash = None
-        acc_reward_perturbed, crash_perturbed, _state_sequence_perturbed = self.mdp(perturbed_state, policy)
+            exec_time = None
 
+        acc_reward_perturbed, crash_perturbed, _state_sequence_perturbed, exec_time_perturbed = self.mdp(perturbed_state, policy)
         if self.logger is not None:
-            self.logger.log(input=perturbed_state, oracle=crash_perturbed, reward=acc_reward_perturbed)
+            self.logger.log(input=perturbed_state, oracle=crash_perturbed, reward=acc_reward_perturbed, test_exec_time=exec_time_perturbed, run_time=time.time())
 
         # computes the sensitivity, the coverage, and adds test case in the pool
         sensitivity = np.abs(acc_reward - acc_reward_perturbed) / perturbation
 
-        return sensitivity, acc_reward, crash, state_sequence
+        return sensitivity, acc_reward, crash, state_sequence, exec_time
 
 
     def local_sensitivity(self, state: np.ndarray, state_mutate: np.ndarray, state_reward: float, state_mutate_reward: float):
@@ -229,17 +231,17 @@ class Fuzzer():
         return np.abs(state_reward - state_mutate_reward) / perturbation
 
 
-    def initialize_coverage_model(self, **kwargs):
-        '''Initializes the coverage model.'''
-
+    def initialize_coverage_model(self, **kwargs) -> int:
+        '''Initializes the coverage model and returns the number of executions that have been done.'''
+        exec_counter = kwargs.get('exec_counter', 0)
         state_sequence = kwargs.pop('state_sequence', None)
         if state_sequence is None:
             policy = kwargs.get('policy', None)
             random_input = kwargs.get('input', self.sampling())
-            reward, crash, state_sequence = self.mdp(random_input, policy)
-
+            reward, crash, state_sequence, exec_time = self.mdp(random_input, policy)
+            kwargs['exec_counter'] = exec_counter + 1
             if self.logger is not None:
-                self.logger.log(input=random_input, oracle=crash, reward=reward)
+                self.logger.log(input=random_input, oracle=crash, reward=reward, test_exec_time=exec_time, run_time=time.time())
 
         # it needs at least k + 1 states (for gmm_c)
         if len(state_sequence) < self.k + 1:
@@ -247,6 +249,7 @@ class Fuzzer():
         else:
             self.coverage_model.initialize(state_sequence)
         print('Coverage model initialized')
+        return exec_counter
 
 
     def fuzzing(self, n: int, policy: Any = None, **kwargs):
@@ -267,7 +270,7 @@ class Fuzzer():
         path = kwargs.get('saving_path', None)
         if path is not None:
             self.logger = FuzzerLogger(path + '_logs.txt')
-            self.logger.log_header_line()
+            self.logger.write_columns()
         else:
             self.logger = None
 
@@ -276,17 +279,21 @@ class Fuzzer():
         initial_inputs = self.sampling(n)
         pool = Pool(is_integer=np.issubdtype(initial_inputs.dtype, np.integer))
         # initializes the coverage model by running the policy on a randomly generated input to sample states of the MDP
-        self.initialize_coverage_model(policy=policy)
+        num_initial_executions = self.initialize_coverage_model(policy=policy)
+        print('init exec', num_initial_executions)
         pbar = tqdm.tqdm(total=n)
         for state in initial_inputs:
-            sensitivity, acc_reward, oracle, state_sequence = self.sentivity(state, policy=policy)
+            sensitivity, acc_reward, oracle, state_sequence, exec_time = self.sentivity(state, policy=policy)
             state_sequence_conc = self._concatenate_state_sequence(state_sequence)
             # computes the coverage and adds test case in the pool
+            t0 = time.time()
             coverage = self.coverage_model.sequence_freshness(state_sequence, state_sequence_conc, tau=self.tau)
+            coverage_time = time.time() - t0
             pool.add(state, acc_reward, coverage, sensitivity, oracle)
 
             if self.logger is not None:
-                self.logger.log(input=state, oracle=oracle, reward=acc_reward, sensitivity=sensitivity, coverage=coverage)
+                self.logger.log(input=state, oracle=oracle, reward=acc_reward, sensitivity=sensitivity, coverage=coverage,
+                                test_exec_time=exec_time, coverage_time=coverage_time, run_time=time.time())
 
             if oracle:
                 pool.add_crash(state)
@@ -299,7 +306,7 @@ class Fuzzer():
             test_budget = kwargs.get('test_budget', None)
             assert test_budget is not None
             # accounts for the cost of the initialization
-            test_budget -=  (2 * n) + 1
+            test_budget -=  (2 * n) + num_initial_executions
             pbar = tqdm.tqdm(total=test_budget)
             num_iterations = 0
         else:
@@ -319,9 +326,11 @@ class Fuzzer():
 
                 input, acc_reward_input = pool.select(self.rng)
                 mutant = self.mutate_validate(input)
-                acc_reward_mutant, oracle, state_sequence = self.mdp(mutant, policy)
+                acc_reward_mutant, oracle, state_sequence, exec_time = self.mdp(mutant, policy)
                 state_sequence_conc = self._concatenate_state_sequence(state_sequence)
+                t0 = time.time()
                 coverage = self.coverage_model.sequence_freshness(state_sequence, state_sequence_conc, tau=self.tau)
+                coverage_time = time.time() - t0
                 sensitivity = None
                 if oracle:
                     pool.add_crash(mutant)
@@ -329,11 +338,12 @@ class Fuzzer():
                     if local_sensitivity:
                         sensitivity = self.local_sensitivity(input, mutant, acc_reward_input, acc_reward_mutant)
                     else:
-                        sensitivity, _acc_reward_mutant_copy, _none, _empty_list = self.sentivity(mutant, acc_reward=acc_reward_mutant, policy=policy)
+                        sensitivity, _acc_reward_mutant_copy, _none_oracle, _empty_list, _none_exec_time = self.sentivity(mutant, acc_reward=acc_reward_mutant, policy=policy)
                     pool.add(mutant, acc_reward_mutant, coverage, sensitivity, oracle)
 
                 if self.logger is not None:
-                    self.logger.log(input=mutant, oracle=oracle, reward=acc_reward_mutant, sensitivity=sensitivity, coverage=coverage)
+                    self.logger.log(input=mutant, oracle=oracle, reward=acc_reward_mutant, sensitivity=sensitivity, coverage=coverage,
+                                    test_exec_time=exec_time, coverage_time=coverage_time, run_time=time.time())
 
                 if test_budget_in_seconds is None:
                     num_iterations += 1
@@ -361,7 +371,7 @@ class Fuzzer():
         path = kwargs.get('saving_path', None)
         if path is not None:
             self.logger = FuzzerLogger(path + '_logs.txt')
-            self.logger.log_header_line()
+            self.logger.write_columns()
         else:
             self.logger = None
 
@@ -371,11 +381,11 @@ class Fuzzer():
         pool = Pool(is_integer=np.issubdtype(initial_inputs.dtype, np.integer))
         pbar = tqdm.tqdm(total=n)
         for state in initial_inputs:
-            sensitivity, acc_reward, oracle, state_sequence = self.sentivity(state, policy=policy)
+            sensitivity, acc_reward, oracle, state_sequence, exec_time = self.sentivity(state, policy=policy)
             pool.add(state, acc_reward, 0, sensitivity, oracle)
 
             if self.logger is not None:
-                self.logger.log(input=state, oracle=oracle, reward=acc_reward, sensitivity=sensitivity)
+                self.logger.log(input=state, oracle=oracle, reward=acc_reward, sensitivity=sensitivity, test_exec_time=exec_time, run_time=time.time())
 
             if oracle:
                 pool.add_crash(state)
@@ -407,7 +417,7 @@ class Fuzzer():
 
             input, acc_reward_input = pool.select(self.rng)
             mutant = self.mutate_validate(input)
-            acc_reward_mutant, oracle, state_sequence = self.mdp(mutant, policy)
+            acc_reward_mutant, oracle, state_sequence, exec_time = self.mdp(mutant, policy)
             sensitivity = None
             if oracle:
                 pool.add_crash(mutant)
@@ -415,11 +425,11 @@ class Fuzzer():
                 if local_sensitivity:
                     sensitivity = self.local_sensitivity(input, mutant, acc_reward_input, acc_reward_mutant)
                 else:
-                    sensitivity, _acc_reward_mutant_copy, _none, _empty_list = self.sentivity(mutant, acc_reward=acc_reward_mutant, policy=policy)
+                    sensitivity, _acc_reward_mutant_copy, _none_oracle, _empty_list, _none_exec_time = self.sentivity(mutant, acc_reward=acc_reward_mutant, policy=policy)
                 pool.add(mutant, acc_reward_mutant, 0, sensitivity, oracle)
 
             if self.logger is not None:
-                self.logger.log(input=mutant, oracle=oracle, reward=acc_reward_mutant, sensitivity=sensitivity)
+                self.logger.log(input=mutant, oracle=oracle, reward=acc_reward_mutant, sensitivity=sensitivity, test_exec_time=exec_time, run_time=time.time())
 
             if test_budget_in_seconds is None:
                 num_iterations += 1
@@ -435,77 +445,6 @@ class Fuzzer():
             pool.save(path)
             self.save_configuration(path)
             self.save_evaluated_solutions(path)
-
-
-    def resume_fuzzing(self, loading_path: str, policy: Any = None, **kwargs):
-        '''Not tested.'''
-        pool = Pool()
-        pool.load(loading_path)
-        self.coverage_model.load(loading_path)
-        self.load(loading_path)
-
-        path = kwargs.get('saving_path', None)
-        if path is not None:
-            self.logger = FuzzerLogger(path + '_logs.txt')
-            self.logger.log_header_line()
-        else:
-            self.logger = None
-
-        local_sensitivity = kwargs.get('local_sensitivity', False)
-
-        test_budget_in_seconds = kwargs.get('test_budget_in_seconds', None)
-        if test_budget_in_seconds is None:
-            test_budget = kwargs.get('test_budget', None)
-            assert test_budget is not None
-            pbar = tqdm.tqdm(total=test_budget)
-            num_iterations = 0
-        else:
-            start_time = time.time()
-            current_time = time.time()
-            seconds = 0
-            pbar = tqdm.tqdm(total=test_budget_in_seconds)
-
-        while True:
-            if test_budget_in_seconds is None:
-                if num_iterations == test_budget:
-                    break
-            else:
-                if (current_time - start_time) > test_budget_in_seconds:
-                    break
-
-            input, acc_reward_input = pool.select(self.rng)
-            mutant = self.mutate_validate(input)
-            acc_reward_mutant, oracle, state_sequence = self.mdp(mutant, policy)
-            state_sequence_conc = self._concatenate_state_sequence(state_sequence)
-            coverage = self.coverage_model.sequence_freshness(state_sequence, state_sequence_conc, tau=self.tau)
-            sensitivity = None
-            if oracle:
-                pool.add_crash(mutant)
-            elif (acc_reward_mutant < acc_reward_input) or (coverage < self.tau):
-                if local_sensitivity:
-                    sensitivity = self.local_sensitivity(input, mutant, acc_reward_input, acc_reward_mutant)
-                else:
-                    sensitivity, _acc_reward_mutant_copy, _none, _empty_list = self.sentivity(mutant, acc_reward=acc_reward_mutant, policy=policy)
-                pool.add(mutant, acc_reward_mutant, coverage, sensitivity, oracle)
-
-            if self.logger is not None:
-                self.logger.log(input=mutant, oracle=oracle, reward=acc_reward_mutant, sensitivity=sensitivity, coverage=coverage)
-
-            if test_budget_in_seconds is None:
-                num_iterations += 1
-                pbar.update(1)
-            else:
-                current_time = time.time()
-                if int(current_time - start_time) > seconds:
-                    seconds += 1
-                    pbar.update(1)
-
-        pbar.close()
-        if path is not None:
-            pool.save(path)
-            self.save_configuration(path)
-            self.save_evaluated_solutions(path)
-            self.coverage_model.save(path)
 
 
     def save_configuration(self, path: str):
@@ -559,7 +498,7 @@ class Fuzzer():
     def random_testing(self, n: int, policy: Any = None, path: str = 'logs'):
         '''RT baseline that generates an input at each iteration until it has not been tested yet.'''
         self.logger = FuzzerLogger(path + '_logs.txt')
-        self.logger.log_header_line()
+        self.logger.write_columns()
 
         pbar = tqdm.tqdm(total=n)
         i = 0
@@ -568,8 +507,9 @@ class Fuzzer():
             tmp = random_input.tolist()
             if not (tmp in self.evaluated_solutions):
                 self.evaluated_solutions.append(tmp)
-                acc_reward, oracle, _state_sequence = self.mdp(random_input, policy)
-                self.logger.log(input=random_input, oracle=oracle, reward=acc_reward)
+                acc_reward, oracle, _state_sequence, exec_time = self.mdp(random_input, policy)
+                self.logger.log(input=random_input, oracle=oracle, reward=acc_reward,
+                                test_exec_time=exec_time, run_time=time.time())
                 pbar.update(1)
                 i += 1
         pbar.close()

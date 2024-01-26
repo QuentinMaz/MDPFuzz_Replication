@@ -1,10 +1,11 @@
+import os
 import numpy as np
 import pandas as pd
 
-from typing import Optional
+from typing import Optional, List, Dict, Union
 
 
-class FuzzerLogger:
+class Logger:
     '''
     A class for logging data values to a .txt file in a specific format.
 
@@ -13,17 +14,97 @@ class FuzzerLogger:
 
     Usage:
     - Initialize the logger with a file path.
+    - Write the header with the write_columns method before logging.
     - Use the log method to add a new log entry.
-    - Use load_logs_as_dataframe to load logs into a Pandas DataFrame.
+    - Use load_logs to load logs into a Pandas DataFrame.
     '''
+
+    def __init__(self, filepath: str, columns: List[str] = None, delimiter: str = '; ') -> None:
+        self.delimiter = delimiter
+
+        if columns is None:
+            assert os.path.isfile(filepath)
+            with open(filepath, 'r') as file:
+                header_line = file.readline().strip()
+                columns = header_line.split(self.delimiter)
+            print('No columns provided; found {} columns in the file'.format(len(columns)))
+
+        assert len(columns) > 0
+        assert np.all([isinstance(c, str) for c in columns])
+
+        self.filepath = filepath
+        self.columns = columns.copy() # type: List[str]
+        self.n = len(self.columns)
+
+
+    def write_columns(self):
+        with open(self.filepath, 'w') as file:
+            file.write(self.delimiter.join(self.columns) + '\n')
+
+
+    def log(self, **kwargs) -> None:
+        '''Serializes and appends the data to log.'''
+        data_serialized = {k: self._serialize(kwargs.get(k, None)) for k in self.columns}
+        self._log(data_serialized)
+
+
+    def load_logs(self) -> pd.DataFrame:
+        '''
+        Load logs from the file and return as a Pandas DataFrame.
+
+        Returns:
+        - pd.DataFrame: DataFrame containing the logged data.
+        '''
+        data = []
+        with open(self.filepath, 'r') as file:
+            header_line = file.readline().strip()
+            assert header_line.split(self.delimiter) == self.columns, header_line.split(self.delimiter)
+            for line in file:
+                values = [v.strip() for v in line.strip().split(self.delimiter)]
+                assert len(values) == self.n
+                data.append([self._deserialize(v) if v != 'None' else None for v in values])
+
+        return pd.DataFrame(data, columns=self.columns)
+
+
+    def _log(self, data: Dict[str, str]) -> None:
+        '''Appends a line to the log file.'''
+        log_line = self.delimiter.join([data[k] for k in self.columns])
+
+        with open(self.filepath, 'a') as file:
+            file.write(log_line + '\n')
+
+
+    def _serialize(self, data = None) -> str:
+        if data is None:
+            return 'None'
+        elif isinstance(data, np.ndarray):
+            return np.array2string(data, separator=',')
+        else:
+            return str(data)
+
+
+    def _deserialize(self, data: str) -> Union[np.ndarray, float, bool]:
+        if data.startswith('['):
+            return np.array(eval('np.array(' + data + ')'))
+        elif data.endswith('e'):
+            return data == 'True'
+        else:
+            return float(data)
+
+
+class FuzzerLogger:
+
     def __init__(self, filepath: str) -> None:
         self.filepath = filepath
-        self.columns = ['input', 'oracle', 'reward', 'sensitivity', 'coverage']
+        self.columns = ['input', 'oracle', 'reward', 'sensitivity', 'coverage', 'test_exec_time', 'coverage_time', 'run_time']
         self.delimiter = '; '
 
-    def log(self, input: Optional[np.ndarray] = None, oracle: Optional[bool] = None,
+    def log(self,
+            input: Optional[np.ndarray] = None, oracle: Optional[bool] = None,
             reward: Optional[float] = None, sensitivity: Optional[float] = None,
-            coverage: Optional[float] = None) -> None:
+            coverage: Optional[float] = None, run_time: Optional[float] = None,
+            test_exec_time: Optional[float] = None, coverage_time: Optional[float] = None) -> None:
         '''
         Log values to the file.
 
@@ -33,6 +114,9 @@ class FuzzerLogger:
         - reward (Optional[float]): Reward value as a floating-point number.
         - sensitivity (Optional[float]): Sensitivity value as a floating-point number.
         - coverage (Optional[float]): Coverage value as a floating-point number.
+        - run_time (Optional[float]): Run time value as a floating-point number.
+        - test_exec_time (Optional[float]): Test execution time value as a floating-point number.
+        - coverage_time (Optional[float]): Time to compute a coverage value as a floating-point number.
         '''
         log_data = {
             #TODO: compared to the pool np.savetxt(.), np.array2string is less accurate
@@ -41,7 +125,10 @@ class FuzzerLogger:
             'oracle': str(oracle) if oracle is not None else 'None',
             'reward': str(reward) if reward is not None else 'None',
             'sensitivity': str(sensitivity) if sensitivity is not None else 'None',
-            'coverage': str(coverage) if coverage is not None else 'None'
+            'coverage': str(coverage) if coverage is not None else 'None',
+            'run_time': str(run_time) if run_time is not None else 'None',
+            'test_exec_time': str(test_exec_time) if test_exec_time is not None else 'None',
+            'coverage_time': str(coverage_time) if coverage_time is not None else 'None'
         }
 
         # ensures correct ordering by using the columns (weakness found when Python version is 3.5)
@@ -69,13 +156,16 @@ class FuzzerLogger:
                 reward = float(values[2]) if values[2] != 'None' else None
                 sensitivity = float(values[3]) if values[3] != 'None' else None
                 coverage = float(values[4]) if values[4] != 'None' else None
+                test_exec_time = float(values[5]) if values[5] != 'None' else None
+                coverage_time = float(values[6]) if values[6] != 'None' else None
+                run_time = float(values[7]) if values[7] != 'None' else None
 
-                data.append([input, oracle, reward, sensitivity, coverage])
+                data.append([input, oracle, reward, sensitivity, coverage, test_exec_time, coverage_time, run_time])
 
         return pd.DataFrame(data, columns=self.columns)
 
 
-    def log_header_line(self):
+    def write_columns(self):
         with open(self.filepath, 'w') as file:
             file.write(self.delimiter.join(self.columns) + '\n')
 
