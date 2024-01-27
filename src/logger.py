@@ -79,7 +79,7 @@ class Logger:
         if data is None:
             return 'None'
         elif isinstance(data, np.ndarray):
-            return np.array2string(data, separator=',')
+            return np.array2string(data, separator=',').replace('\n', '')
         else:
             return str(data)
 
@@ -121,7 +121,7 @@ class FuzzerLogger:
         log_data = {
             #TODO: compared to the pool np.savetxt(.), np.array2string is less accurate
             # It would be problematic if the precision difference causes reproducibility issue...
-            'input': np.array2string(input, separator=',') if input is not None else 'None',
+            'input': np.array2string(input, separator=',').replace('\n', '') if input is not None else 'None',
             'oracle': str(oracle) if oracle is not None else 'None',
             'reward': str(reward) if reward is not None else 'None',
             'sensitivity': str(sensitivity) if sensitivity is not None else 'None',
