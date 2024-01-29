@@ -1,5 +1,6 @@
 import os
 import time
+import copy
 import json
 import tqdm
 import numpy as np
@@ -147,7 +148,7 @@ class Fuzzer():
 
         # random generators
         self.random_seed = random_seed
-        self.rng  = np.random.default_rng(self.random_seed) # type: np.random.Generator
+        self.rng = np.random.default_rng(self.random_seed) # type: np.random.Generator
 
         # coverage model (composed of 2 GMMS)
         self.coverage_model = CoverageModel(random_seed, k, gamma)
@@ -157,6 +158,22 @@ class Fuzzer():
         self.executor = executor
         self.sim_steps = self.executor.sim_steps
         self.env_seed = self.executor.env_seed
+
+        self._set_config()
+
+
+    def _set_config(self):
+        self.config = {
+            'k': self.k,
+            'gamma': self.gamma,
+            'tau': self.tau,
+            'random_seed': self.random_seed,
+            'random_state': self.rng.bit_generator.state,
+            'env_seed': self.env_seed,
+            'sim_steps': self.sim_steps,
+            'name': 'MPDFuzz',
+            'use_case': type(self.executor).__name__
+        }
 
 
     def _concatenate_state_sequence(self, state_sequence: np.ndarray) -> np.ndarray:
@@ -264,10 +281,14 @@ class Fuzzer():
         - local_sensitivity (bool, optional): Flag indicating whether to compute local sensitivity (default: False).
         - test_budget_in_seconds (int, optional): Time budget for fuzzing in seconds (default: None).
         - test_budget (int, optional): Number of iterations if time budget is not specified (default: None).
+        - exp_name (str, optional): Name of the experiment to overwrite the key "use_case" of the configuration dictionary.
+        - save_only_logs (bool, optional): Flag indicating whether to only save the configuration of the execution (default: False).
 
         Returns:
         None. The function conducts the fuzzing process and stores generated test cases.
         '''
+        if kwargs.get('exp_name', None) is not None:
+            self.config['use_case'] = kwargs['exp_name']
         path = kwargs.get('saving_path', None)
         if path is not None:
             self.logger = FuzzerLogger(path + '_logs.txt')
@@ -278,10 +299,11 @@ class Fuzzer():
         local_sensitivity = kwargs.get('local_sensitivity', False)
 
         initial_inputs = self.sampling(n)
+        self.config['init_budget'] = n
         pool = Pool(is_integer=np.issubdtype(initial_inputs.dtype, np.integer))
         # initializes the coverage model by running the policy on a randomly generated input to sample states of the MDP
         num_initial_executions = self.initialize_coverage_model(policy=policy)
-        print('init exec', num_initial_executions)
+        self.config['num_initial_executions'] = num_initial_executions
         pbar = tqdm.tqdm(total=n)
         for state in initial_inputs:
             sensitivity, acc_reward, oracle, state_sequence, exec_time = self.sentivity(state, policy=policy)
@@ -309,13 +331,14 @@ class Fuzzer():
             # accounts for the cost of the initialization
             test_budget -=  (2 * n) + num_initial_executions
             pbar = tqdm.tqdm(total=test_budget)
+            self.config['test_budget'] = test_budget
             num_iterations = 0
         else:
             start_time = time.time()
             current_time = time.time()
             seconds = 0
             pbar = tqdm.tqdm(total=test_budget_in_seconds)
-
+            self.config['test_budget_in_seconds'] = test_budget_in_seconds
         try:
             while True:
                 if test_budget_in_seconds is None:
@@ -359,16 +382,20 @@ class Fuzzer():
 
         pbar.close()
         if path is not None:
-            pool.save(path)
+            if not kwargs.get('save_logs_only', False):
+                self.save_evaluated_solutions(path)
+                self.coverage_model.save(path)
+                pool.save(path)
             self.save_configuration(path)
-            self.save_evaluated_solutions(path)
-            self.coverage_model.save(path)
 
 
     def fuzzing_no_coverage(self, n: int, policy: Any = None, **kwargs):
         '''
         Works similarly as fuzzing but coverages are not computed.
         '''
+        if kwargs.get('exp_name', None) is not None:
+            self.config['use_case'] = kwargs['exp_name']
+        self.config['name'] = 'Fuzzer'
         path = kwargs.get('saving_path', None)
         if path is not None:
             self.logger = FuzzerLogger(path + '_logs.txt')
@@ -379,6 +406,7 @@ class Fuzzer():
         local_sensitivity = kwargs.get('local_sensitivity', False)
 
         initial_inputs = self.sampling(n)
+        self.config['init_budget'] = n
         pool = Pool(is_integer=np.issubdtype(initial_inputs.dtype, np.integer))
         pbar = tqdm.tqdm(total=n)
         for state in initial_inputs:
@@ -398,15 +426,16 @@ class Fuzzer():
         if test_budget_in_seconds is None:
             test_budget = kwargs.get('test_budget', None)
             assert test_budget is not None
-            # accounts for the cost of the initialization
-            test_budget -=  (2 * n) + 1
+            test_budget -=  (2 * n)
             pbar = tqdm.tqdm(total=test_budget)
+            self.config['test_budget'] = test_budget
             num_iterations = 0
         else:
             start_time = time.time()
             current_time = time.time()
             seconds = 0
             pbar = tqdm.tqdm(total=test_budget_in_seconds)
+            self.config['test_budget_in_seconds'] = test_budget_in_seconds
 
         while True:
             if test_budget_in_seconds is None:
@@ -443,24 +472,18 @@ class Fuzzer():
 
         pbar.close()
         if path is not None:
-            pool.save(path)
+            if not kwargs.get('save_logs_only', False):
+                self.save_evaluated_solutions(path)
+                self.coverage_model.save(path)
+                pool.save(path)
             self.save_configuration(path)
-            self.save_evaluated_solutions(path)
 
 
     def save_configuration(self, path: str):
         filepath = path.split('.json')[0]
-        configuration = dict()
-        # attributes
-        configuration['k'] = self.k
-        configuration['gamma'] = self.gamma
-        configuration['tau'] = self.tau
-        configuration['random_seed'] = self.random_seed
-        configuration['env_seed'] = self.env_seed
-        # along with the initial random seed and the states of the random generator
-        configuration['random_state'] = self.rng.bit_generator.state
+        self.config['random_state'] = self.rng.bit_generator.state
         with open(filepath + '_config.json', 'w') as f:
-            f.write(json.dumps(configuration))
+            f.write(json.dumps(self.config))
 
 
     def save_evaluated_solutions(self, path: str):
@@ -478,6 +501,7 @@ class Fuzzer():
         with open(config_filepath, 'r') as f:
             config = json.load(f)
         self._load_dict(config)
+        self.config = copy.deepcopy(config)
         if os.path.isfile(path + '_evaluations.txt'):
             self.load_evaluated_solutions(path + '_evaluations.txt')
             print('found {} evaluated solutions.'.format(len(self.evaluated_solutions)))
@@ -488,19 +512,23 @@ class Fuzzer():
         self.gamma = configuration['gamma']
         self.random_seed = configuration['random_seed']
         self.env_seed = configuration['env_seed']
-        self.rng  = np.random.default_rng(self.random_seed) # type: np.random.Generator
+        self.rng = np.random.default_rng(self.random_seed) # type: np.random.Generator
         self.rng.bit_generator.state = configuration['random_state']
+        # self._set_config()
 
 
     def load_evaluated_solutions(self, filepath: str):
-        self.evaluated_solutions = np.loadtxt(filepath, delimiter=',', dtype=int).tolist()
+        self.evaluated_solutions = np.loadtxt(filepath, delimiter=',').tolist()
 
 
-    def random_testing(self, n: int, policy: Any = None, path: str = 'logs'):
+    def random_testing(self, n: int, policy: Any = None, path: str = 'logs', **kwargs):
         '''RT baseline that generates an input at each iteration until it has not been tested yet.'''
+        if kwargs.get('exp_name', None) is not None:
+            self.config['use_case'] = kwargs['exp_name']
+        self.config['name'] = 'RT'
+        self.config['test_budget'] = n
         self.logger = FuzzerLogger(path + '_logs.txt')
         self.logger.write_columns()
-
         pbar = tqdm.tqdm(total=n)
         i = 0
         while i < n:
