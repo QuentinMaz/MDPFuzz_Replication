@@ -24,7 +24,7 @@ else:
 
 # float64; 1E3 for float32
 TMP = 1E6 * np.finfo('d').eps
-
+MAXIMUM_DENSITY = 10e9
 
 class GMM():
     '''CS statistics are weighted.'''
@@ -310,7 +310,11 @@ class CoverageModel():
         states_cond_pdf = np.zeros((states_cond.shape[0], self.k_c))
         for i in range(states_cond.shape[0]):
             states_cond_pdf[i] = self.GMM_c.gmm(states_cond[i], add_offset=True)
-            density *= (np.sum(states_cond_pdf[i]) / np.sum(states_pdf[i]))
+            tmp = (np.sum(states_cond_pdf[i]) / np.sum(states_pdf[i]))
+            density *= tmp
+            # avoids useless computations
+            if density > MAXIMUM_DENSITY:
+                break
 
         if tau is None or ((tau is not None) and (density < tau)):
             self.dynamic_EM(states, states_cond)
@@ -491,7 +495,7 @@ def test_gmm_4D():
     print(gmm.means)
 
 if __name__ == '__main__':
-    main_to_test_gmm = False
+    main_to_test_gmm = True
 
     if main_to_test_gmm:
         # difficult initial means
