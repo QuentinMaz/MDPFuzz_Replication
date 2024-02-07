@@ -386,7 +386,7 @@ class Fuzzer():
                 self.save_evaluated_solutions(path)
                 self.coverage_model.save(path)
                 pool.save(path)
-            self.save_configuration(path)
+                self.save_configuration(path)
 
 
     def fuzzing_no_coverage(self, n: int, policy: Any = None, **kwargs):
@@ -476,7 +476,7 @@ class Fuzzer():
                 self.save_evaluated_solutions(path)
                 self.coverage_model.save(path)
                 pool.save(path)
-            self.save_configuration(path)
+                self.save_configuration(path)
 
 
     def save_configuration(self, path: str):
