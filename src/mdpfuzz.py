@@ -364,7 +364,6 @@ class Fuzzer():
         if path is not None:
             if not kwargs.get('save_logs_only', False):
                 self.save_evaluated_solutions(path)
-                self.coverage_model.save(path)
                 pool.save(path)
                 self.save_configuration(path)
 
