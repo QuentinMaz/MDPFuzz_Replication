@@ -53,7 +53,7 @@ class Fuzzer():
             'random_state': self.rng.bit_generator.state,
             'env_seed': self.env_seed,
             'sim_steps': self.sim_steps,
-            'name': 'MPDFuzz',
+            'name': 'MDPFuzz',
             'use_case': type(self.executor).__name__
         }
 
