@@ -51,7 +51,7 @@ class IndexedPool(Pool):
     It is thus suited for small input space and detailed results.
     '''
     def __init__(self, is_integer: bool = False) -> None:
-        super.__init__()
+        super().__init__()
         self.indices = [] # type: List[str]
         self.added = [] # type: List[int]
 

@@ -164,7 +164,7 @@ class Fuzzer():
         - test_budget_in_seconds (int, optional): Time budget for fuzzing in seconds (default: None).
         - test_budget (int, optional): Number of iterations if time budget is not specified (default: None).
         - exp_name (str, optional): Name of the experiment to overwrite the key "use_case" of the configuration dictionary.
-        - save_only_logs (bool, optional): Flag indicating whether to only save the configuration of the execution (default: False).
+        - save_logs_only (bool, optional): Flag indicating whether to only save the configuration of the execution (default: False).
         - light_pool (bool, optional): Flag indicating whether to use the LightPool class for the pool (default: False).
 
         Returns:
@@ -268,12 +268,15 @@ class Fuzzer():
             print(e)
 
         pbar.close()
+        # saves at least the configuration and the history of the input selection (if Pool allows)
         if path is not None:
+            self.save_configuration(path)
+            if kwargs.get('light_pool', False):
+                np.savetxt(path + '_selected.txt', pool.selected, fmt='%1.0f', delimiter=',')
             if not kwargs.get('save_logs_only', False):
                 self.save_evaluated_solutions(path)
-                self.coverage_model.save(path)
                 pool.save(path)
-                self.save_configuration(path)
+                self.coverage_model.save(path)
 
 
     def fuzzing_no_coverage(self, n: int, policy: Any = None, **kwargs):
@@ -362,10 +365,12 @@ class Fuzzer():
 
         pbar.close()
         if path is not None:
+            self.save_configuration(path)
+            if kwargs.get('light_pool', False):
+                np.savetxt(path + '_selected.txt', pool.selected, fmt='%1.0f', delimiter=',')
             if not kwargs.get('save_logs_only', False):
                 self.save_evaluated_solutions(path)
                 pool.save(path)
-                self.save_configuration(path)
 
 
     def save_configuration(self, path: str):

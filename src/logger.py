@@ -146,22 +146,29 @@ class FuzzerLogger:
         - pd.DataFrame: DataFrame containing the logged data.
         '''
         data = []
+        malformed_lines = []
         with open(self.filepath, 'r') as file:
             header_line = file.readline().strip()
             assert header_line.split(self.delimiter) == self.columns, header_line.split(self.delimiter)
-            for line in file:
-                values = [v.strip() for v in line.strip().split(self.delimiter)]
-                input = np.array(eval('np.array(' + values[0] + ')')) if values[0] != 'None' else None
-                oracle = values[1] == 'True' if values[1] != 'None' else None
-                reward = float(values[2]) if values[2] != 'None' else None
-                sensitivity = float(values[3]) if values[3] != 'None' else None
-                coverage = float(values[4]) if values[4] != 'None' else None
-                test_exec_time = float(values[5]) if values[5] != 'None' else None
-                coverage_time = float(values[6]) if values[6] != 'None' else None
-                run_time = float(values[7]) if values[7] != 'None' else None
+            for num_line, line in enumerate(file):
+                try:
+                    values = [v.strip() for v in line.strip().split(self.delimiter)]
+                    input = np.array(eval('np.array(' + values[0] + ')')) if values[0] != 'None' else None
+                    oracle = values[1] == 'True' if values[1] != 'None' else None
+                    reward = float(values[2]) if values[2] != 'None' else None
+                    sensitivity = float(values[3]) if values[3] != 'None' else None
+                    coverage = float(values[4]) if values[4] != 'None' else None
+                    test_exec_time = float(values[5]) if values[5] != 'None' else None
+                    coverage_time = float(values[6]) if values[6] != 'None' else None
+                    run_time = float(values[7]) if values[7] != 'None' else None
 
-                data.append([input, oracle, reward, sensitivity, coverage, test_exec_time, coverage_time, run_time])
-
+                    data.append([input, oracle, reward, sensitivity, coverage, test_exec_time, coverage_time, run_time])
+                except:
+                    malformed_lines.append('\tLine {}: "{}"'.format(num_line, line.strip()))
+        # if malformed_lines != []:
+        #     print('Found malformed lines in file "{}"'.format(self.filepath))
+        #     for info in malformed_lines:
+        #         print(info)
         return pd.DataFrame(data, columns=self.columns)
 
 
