@@ -271,7 +271,7 @@ class Fuzzer():
         # saves at least the configuration and the history of the input selection (if Pool allows)
         if path is not None:
             self.save_configuration(path)
-            if kwargs.get('light_pool', False):
+            if not kwargs.get('light_pool', False):
                 np.savetxt(path + '_selected.txt', pool.selected, fmt='%1.0f', delimiter=',')
             if not kwargs.get('save_logs_only', False):
                 self.save_evaluated_solutions(path)
@@ -366,7 +366,7 @@ class Fuzzer():
         pbar.close()
         if path is not None:
             self.save_configuration(path)
-            if kwargs.get('light_pool', False):
+            if not kwargs.get('light_pool', False):
                 np.savetxt(path + '_selected.txt', pool.selected, fmt='%1.0f', delimiter=',')
             if not kwargs.get('save_logs_only', False):
                 self.save_evaluated_solutions(path)
