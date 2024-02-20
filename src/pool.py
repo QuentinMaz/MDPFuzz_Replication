@@ -30,8 +30,10 @@ class Pool(ABC):
 
     def select(self, rng: np.random.Generator) -> Tuple[np.ndarray, float]:
         '''Returns one of the inputs along with its accumulated reward of the pool with random sampling biased by the sensitivities.'''
-        # the sum of sensitivities can be zero?
-        index = rng.choice(len(self.inputs), p=(self.sensitivities / np.sum(self.sensitivities)))
+        if np.sum(self.sensitivities) == 0:
+            index = rng.choice(len(self.inputs))
+        else:
+            index = rng.choice(len(self.inputs), p=(self.sensitivities / np.sum(self.sensitivities)))
         self.selected[index] += 1
         # copy.deepcopy(self.inputs[index]) # .copy(() seems to be enough
         return self.inputs[index].copy(), self.rewards[index]

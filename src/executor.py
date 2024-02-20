@@ -12,7 +12,7 @@ class Executor(ABC):
         super().__init__()
 
     @abstractmethod
-    def mutate(self, input: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    def mutate(self, input: np.ndarray, rng: np.random.Generator, **kwargs) -> np.ndarray:
         pass
 
     @abstractmethod

@@ -73,14 +73,14 @@ class Fuzzer():
             return self.executor.generate_inputs(self.rng, n=n)
 
 
-    def mutate(self, state: np.ndarray):
-        return self.executor.mutate(state, self.rng)
+    def mutate(self, state: np.ndarray, **kwargs):
+        return self.executor.mutate(state, self.rng, **kwargs)
 
 
-    def mutate_validate(self, state: np.ndarray):
+    def mutate_validate(self, state: np.ndarray, **kwargs):
         attempts = 1
         while attempts < 100:
-            mutate_states = self.mutate(state)
+            mutate_states = self.mutate(state, **kwargs)
             tmp = mutate_states.tolist()
             if not (tmp in self.evaluated_solutions):
                 self.evaluated_solutions.append(tmp)
@@ -96,7 +96,7 @@ class Fuzzer():
         return episode_reward, done, obs_seq, exec_time
 
 
-    def sentivity(self, state: np.ndarray, acc_reward: float = None, policy: Any = None) -> Tuple[float, float, bool, List[np.ndarray], float]:
+    def sentivity(self, state: np.ndarray, acc_reward: float = None, policy: Any = None, **kwargs) -> Tuple[float, float, bool, List[np.ndarray], float]:
         '''
         Computes the sensitivity of the state @state.
         It first perturbs the state and computes the perturbation quantity.
@@ -104,7 +104,7 @@ class Fuzzer():
         It returns the latter, as well as the results of the execution for the state (acc. reward, sequence, oracle and execution time).
         '''
         # perturbs the state and computes the perturbation
-        perturbed_state = self.mutate_validate(state)
+        perturbed_state = self.mutate_validate(state, **kwargs)
         perturbation = np.linalg.norm(state - perturbed_state)
 
         # runs the two states if no accumulated reward is provided
@@ -303,7 +303,7 @@ class Fuzzer():
             pool = IndexedPool(is_integer=np.issubdtype(initial_inputs.dtype, np.integer)) # type: Pool
         pbar = tqdm.tqdm(total=n)
         for state in initial_inputs:
-            sensitivity, acc_reward, oracle, state_sequence, exec_time = self.sentivity(state, policy=policy)
+            sensitivity, acc_reward, oracle, state_sequence, exec_time = self.sentivity(state, policy=policy, **kwargs)
             pool.add(state, acc_reward, 0, sensitivity, oracle)
 
             if self.logger is not None:
@@ -339,7 +339,7 @@ class Fuzzer():
                     break
 
             input, acc_reward_input = pool.select(self.rng)
-            mutant = self.mutate_validate(input)
+            mutant = self.mutate_validate(input, **kwargs)
             acc_reward_mutant, oracle, state_sequence, exec_time = self.mdp(mutant, policy)
             sensitivity = None
             if oracle:
@@ -348,7 +348,7 @@ class Fuzzer():
                 if local_sensitivity:
                     sensitivity = self.local_sensitivity(input, mutant, acc_reward_input, acc_reward_mutant)
                 else:
-                    sensitivity, _acc_reward_mutant_copy, _none_oracle, _empty_list, _none_exec_time = self.sentivity(mutant, acc_reward=acc_reward_mutant, policy=policy)
+                    sensitivity, _acc_reward_mutant_copy, _none_oracle, _empty_list, _none_exec_time = self.sentivity(mutant, acc_reward=acc_reward_mutant, policy=policy, **kwargs)
                 pool.add(mutant, acc_reward_mutant, 0, sensitivity, oracle)
 
             if self.logger is not None:
