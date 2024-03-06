@@ -148,7 +148,7 @@ class Fuzzer():
             reward, crash, state_sequence, exec_time = self.mdp(random_input, policy)
             exec_counter += 1
             if self.logger is not None:
-                episode_length = len(episode_length)
+                episode_length = len(state_sequence)
                 self.logger.log(
                     input=random_input,
                     oracle=crash,
