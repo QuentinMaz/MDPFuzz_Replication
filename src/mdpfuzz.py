@@ -115,9 +115,17 @@ class Fuzzer():
             crash = None
             exec_time = None
 
-        acc_reward_perturbed, crash_perturbed, _state_sequence_perturbed, exec_time_perturbed = self.mdp(perturbed_state, policy)
+        acc_reward_perturbed, crash_perturbed, state_sequence_perturbed, exec_time_perturbed = self.mdp(perturbed_state, policy)
         if self.logger is not None:
-            self.logger.log(input=perturbed_state, oracle=crash_perturbed, reward=acc_reward_perturbed, test_exec_time=exec_time_perturbed, run_time=time.time())
+            episode_length = len(state_sequence_perturbed)
+            self.logger.log(
+                input=perturbed_state,
+                oracle=crash_perturbed,
+                reward=acc_reward_perturbed,
+                episode_length=episode_length,
+                test_exec_time=exec_time_perturbed,
+                run_time=time.time()
+            )
 
         # computes the sensitivity, the coverage, and adds test case in the pool
         sensitivity = np.abs(acc_reward - acc_reward_perturbed) / perturbation
@@ -140,7 +148,15 @@ class Fuzzer():
             reward, crash, state_sequence, exec_time = self.mdp(random_input, policy)
             exec_counter += 1
             if self.logger is not None:
-                self.logger.log(input=random_input, oracle=crash, reward=reward, test_exec_time=exec_time, run_time=time.time())
+                episode_length = len(episode_length)
+                self.logger.log(
+                    input=random_input,
+                    oracle=crash,
+                    reward=reward,
+                    episode_length=episode_length,
+                    test_exec_time=exec_time,
+                    run_time=time.time()
+                    )
 
         # it needs at least k + 1 states (for gmm_c)
         if len(state_sequence) < self.k + 1:
@@ -193,7 +209,7 @@ class Fuzzer():
         self.config['num_initial_executions'] = num_initial_executions
         pbar = tqdm.tqdm(total=n)
         for state in initial_inputs:
-            sensitivity, acc_reward, oracle, state_sequence, exec_time = self.sentivity(state, policy=policy)
+            sensitivity, acc_reward, oracle, state_sequence, exec_time = self.sentivity(state, policy=policy, **kwargs)
             state_sequence_conc = self._concatenate_state_sequence(state_sequence)
             # computes the coverage and adds test case in the pool
             t0 = time.time()
@@ -202,8 +218,18 @@ class Fuzzer():
             pool.add(state, acc_reward, coverage, sensitivity, oracle)
 
             if self.logger is not None:
-                self.logger.log(input=state, oracle=oracle, reward=acc_reward, sensitivity=sensitivity, coverage=coverage,
-                                test_exec_time=exec_time, coverage_time=coverage_time, run_time=time.time())
+                episode_length = len(state_sequence)
+                self.logger.log(
+                    input=state,
+                    oracle=oracle,
+                    reward=acc_reward,
+                    episode_length=episode_length,
+                    sensitivity=sensitivity,
+                    coverage=coverage,
+                    test_exec_time=exec_time,
+                    coverage_time=coverage_time,
+                    run_time=time.time()
+                )
 
             if oracle:
                 pool.add_crash(state)
@@ -236,7 +262,7 @@ class Fuzzer():
                         break
 
                 input, acc_reward_input = pool.select(self.rng)
-                mutant = self.mutate_validate(input)
+                mutant = self.mutate_validate(input, **kwargs)
                 acc_reward_mutant, oracle, state_sequence, exec_time = self.mdp(mutant, policy)
                 state_sequence_conc = self._concatenate_state_sequence(state_sequence)
                 t0 = time.time()
@@ -249,12 +275,22 @@ class Fuzzer():
                     if local_sensitivity:
                         sensitivity = self.local_sensitivity(input, mutant, acc_reward_input, acc_reward_mutant)
                     else:
-                        sensitivity, _acc_reward_mutant_copy, _none_oracle, _empty_list, _none_exec_time = self.sentivity(mutant, acc_reward=acc_reward_mutant, policy=policy)
+                        sensitivity, _acc_reward_mutant_copy, _none_oracle, _empty_list, _none_exec_time = self.sentivity(mutant, acc_reward=acc_reward_mutant, policy=policy, **kwargs)
                     pool.add(mutant, acc_reward_mutant, coverage, sensitivity, oracle)
 
                 if self.logger is not None:
-                    self.logger.log(input=mutant, oracle=oracle, reward=acc_reward_mutant, sensitivity=sensitivity, coverage=coverage,
-                                    test_exec_time=exec_time, coverage_time=coverage_time, run_time=time.time())
+                    episode_length = len(state_sequence)
+                    self.logger.log(
+                        input=mutant,
+                        oracle=oracle,
+                        reward=acc_reward_mutant,
+                        episode_length=episode_length,
+                        sensitivity=sensitivity,
+                        coverage=coverage,
+                        test_exec_time=exec_time,
+                        coverage_time=coverage_time,
+                        run_time=time.time()
+                    )
 
                 if test_budget_in_seconds is None:
                     num_iterations += 1
@@ -307,7 +343,16 @@ class Fuzzer():
             pool.add(state, acc_reward, 0, sensitivity, oracle)
 
             if self.logger is not None:
-                self.logger.log(input=state, oracle=oracle, reward=acc_reward, sensitivity=sensitivity, test_exec_time=exec_time, run_time=time.time())
+                episode_length = len(state_sequence)
+                self.logger.log(
+                    input=state,
+                    oracle=oracle,
+                    reward=acc_reward,
+                    episode_length=episode_length,
+                    sensitivity=sensitivity,
+                    test_exec_time=exec_time,
+                    run_time=time.time()
+                )
 
             if oracle:
                 pool.add_crash(state)
@@ -352,7 +397,16 @@ class Fuzzer():
                 pool.add(mutant, acc_reward_mutant, 0, sensitivity, oracle)
 
             if self.logger is not None:
-                self.logger.log(input=mutant, oracle=oracle, reward=acc_reward_mutant, sensitivity=sensitivity, test_exec_time=exec_time, run_time=time.time())
+                episode_length = len(state_sequence)
+                self.logger.log(
+                    input=state,
+                    oracle=oracle,
+                    reward=acc_reward,
+                    episode_length=episode_length,
+                    sensitivity=sensitivity,
+                    test_exec_time=exec_time,
+                    run_time=time.time()
+                )
 
             if test_budget_in_seconds is None:
                 num_iterations += 1
@@ -416,9 +470,15 @@ class Fuzzer():
 
 
     def random_testing(self, n: int, policy: Any = None, path: str = 'logs', **kwargs):
-        '''RT baseline that generates an input at each iteration until it has not been tested yet.'''
+        '''
+        RT baseline that generates an input at each iteration.
+        By default, the method checks at the inputs don't have been tested before.
+        Such redundant testing guard can be disabled with the argument 'check_redundant_input'.
+        '''
         if kwargs.get('exp_name', None) is not None:
             self.config['use_case'] = kwargs['exp_name']
+        check_redundant_input = kwargs.get('check_redundant_input', True)
+
         self.config['name'] = 'RT'
         self.config['test_budget'] = n
         self.logger = FuzzerLogger(path + '_logs.txt')
@@ -426,15 +486,30 @@ class Fuzzer():
         pbar = tqdm.tqdm(total=n)
         i = 0
         while i < n:
+            execute = True
             random_input = self.sampling(1)
-            tmp = random_input.tolist()
-            if not (tmp in self.evaluated_solutions):
-                self.evaluated_solutions.append(tmp)
-                acc_reward, oracle, _state_sequence, exec_time = self.mdp(random_input, policy)
-                self.logger.log(input=random_input, oracle=oracle, reward=acc_reward,
-                                test_exec_time=exec_time, run_time=time.time())
+
+            if check_redundant_input:
+                tmp = random_input.tolist()
+                if not (tmp in self.evaluated_solutions):
+                    self.evaluated_solutions.append(tmp)
+                else:
+                    execute = False
+
+            if execute:
+                acc_reward, oracle, state_sequence, exec_time = self.mdp(random_input, policy)
+                episode_length = len(state_sequence)
+                self.logger.log(
+                    input=random_input,
+                    oracle=oracle,
+                    reward=acc_reward,
+                    episode_length=episode_length,
+                    test_exec_time=exec_time,
+                    run_time=time.time()
+                )
                 pbar.update(1)
                 i += 1
+
         pbar.close()
 
         self.save_configuration(path)
