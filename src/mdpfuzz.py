@@ -307,12 +307,13 @@ class Fuzzer():
         # saves at least the configuration and the history of the input selection (if Pool allows)
         if path is not None:
             self.save_configuration(path)
-            if not kwargs.get('light_pool', False):
-                np.savetxt(path + '_selected.txt', pool.selected, fmt='%1.0f', delimiter=',')
+            np.savetxt(path + '_selected.txt', pool.selected, fmt='%1.0f', delimiter=',')
             if not kwargs.get('save_logs_only', False):
-                self.save_evaluated_solutions(path)
-                pool.save(path)
                 self.coverage_model.save(path)
+                self.save_evaluated_solutions(path)
+                # saves pool only if not LightPool
+                if not kwargs.get('light_pool', False):
+                    pool.save(path)
 
 
     def fuzzing_no_coverage(self, n: int, policy: Any = None, **kwargs):
@@ -399,9 +400,9 @@ class Fuzzer():
             if self.logger is not None:
                 episode_length = len(state_sequence)
                 self.logger.log(
-                    input=state,
+                    input=mutant,
                     oracle=oracle,
-                    reward=acc_reward,
+                    reward=acc_reward_mutant,
                     episode_length=episode_length,
                     sensitivity=sensitivity,
                     test_exec_time=exec_time,
@@ -420,11 +421,12 @@ class Fuzzer():
         pbar.close()
         if path is not None:
             self.save_configuration(path)
-            if not kwargs.get('light_pool', False):
-                np.savetxt(path + '_selected.txt', pool.selected, fmt='%1.0f', delimiter=',')
+            np.savetxt(path + '_selected.txt', pool.selected, fmt='%1.0f', delimiter=',')
             if not kwargs.get('save_logs_only', False):
                 self.save_evaluated_solutions(path)
-                pool.save(path)
+                # saves pool only if not LightPool
+                if not kwargs.get('light_pool', False):
+                    pool.save(path)
 
 
     def save_configuration(self, path: str):
