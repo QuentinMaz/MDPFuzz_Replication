@@ -27,7 +27,7 @@ class Logger:
             with open(filepath, 'r') as file:
                 header_line = file.readline().strip()
                 columns = header_line.split(self.delimiter)
-            print('No columns provided; found {} columns in the file'.format(len(columns)))
+            # print('No columns provided; found {} columns in the file'.format(len(columns)))
 
         assert len(columns) > 0
         assert np.all([isinstance(c, str) for c in columns])
