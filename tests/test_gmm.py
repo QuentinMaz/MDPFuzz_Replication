@@ -2,24 +2,27 @@ import pytest
 import copy
 import numpy as np
 
-import src.gmm as gmm
-from src.utils import plot_gaussians, generate_clustered_data
-
+from src.utils import plot_gaussians, generate_clustered_data, remove_gaussian, create_gif
+from src.gmm import GMM
 
 @pytest.fixture(scope='module')
 def input_data():
     k = dim = 2
+    gamma = 0.01
     means = [[1, 1], [4, 4]]
-    test_rng: np.random.Generator = np.random.default_rng(42)
+    cmap_values = [0.25, 0.55]
+    test_rng = np.random.default_rng(42) # type: np.random.Generator
     initial_data, fig, ax = generate_clustered_data(
         dim,
         k,
         means,
         num_points_per_cluster=1000,
         plot=True,
-        spread_factor=0.05
+        spread_factor=0.05,
+        rng=test_rng
     )
-    gmm = gmm.GMM(0, k)
+    gmm = GMM(0, k)
+    gmm.set_gamma(gamma)
     test_data = {
         'k': k,
         'dim': dim,
@@ -29,7 +32,8 @@ def input_data():
         'rng': test_rng,
         'initial_data': initial_data,
         'fig': fig,
-        'ax': ax
+        'ax': ax,
+        'colors': cmap_values
     }
 
     return test_data
@@ -39,7 +43,7 @@ def input_data():
 def test_initialize(input_data):
     rng = input_data['rng']
     data_shuffled = rng.permutation(input_data['initial_data'])
-    gmm: gmm.GMM = input_data['gmm']
+    gmm = input_data['gmm'] # type: GMM
     gmm.initialize(data_shuffled[:input_data['k']])
 
     assert True
@@ -47,7 +51,9 @@ def test_initialize(input_data):
     # dirty
     fig = input_data['fig']
     ax = fig.get_axes()[0]
-    plot_gaussians(gmm.means, gmm.covariances, ax)
+    plot_gaussians(gmm.means, gmm.covariances, ax, cmap_values=input_data['colors'])
+    ax.set_xlim(ax.get_xlim())
+    ax.set_ylim(ax.get_ylim())
     fig.savefig('imgs/test_initialize.png')
 
 
@@ -55,77 +61,28 @@ def test_initialize(input_data):
 def test_online_gmm(input_data):
     rng = input_data['rng']
     data_shuffled = rng.permutation(input_data['initial_data'])
-    gmm: gmm.GMM = input_data['gmm']
+    gmm = input_data['gmm'] # type: GMM
     ll = [gmm.log_likelihood(data_shuffled)]
 
     m = len(data_shuffled)
-    gamma = input_data['gamma']
     batch_size = 100
 
-    for _ in range(10):
+    fig = input_data['fig']
+    ax = fig.get_axes()[0]
+
+    for i in range(10):
         samples = data_shuffled[rng.choice(m, size=batch_size)]
         before = gmm.log_likelihood(samples)
-        gmm.online_gmm(samples, gamma=gamma)
+        gmm.online_EM(samples)
         after = gmm.log_likelihood(samples)
         assert before < after
         ll.append(gmm.log_likelihood(data_shuffled))
+        remove_gaussian(ax)
+        plot_gaussians(gmm.means, gmm.covariances, ax, cmap_values=input_data['colors'])
+        fig.savefig('imgs/iteration_{}.png'.format(i))
 
     # dirty
-    fig = input_data['fig']
-    ax = fig.get_axes()[0]
-    plot_gaussians(gmm.means, gmm.covariances, ax)
+    remove_gaussian(ax)
+    plot_gaussians(gmm.means, gmm.covariances, ax, cmap_values=input_data['colors'])
     fig.savefig('imgs/test_online_gmm.png')
-
-
-
-
-# @pytest.fixture()
-# def plot_after_test(request):
-#     yield
-#     test_name = request.node.name.replace('test_', '')
-
-
-# def plot_test_gaussians(fig, means, covariances, filename):
-#     ax = fig.get_axes()[0]
-#     plot_gaussians(means, covariances, ax)
-#     fig.savefig(f'imgs/{filename}.png')
-
-
-# def test_and_plot():
-#     means, covariances = test_initialize()
-#     plot_test_gaussians(fig, means, covariances, 'test_initialize')
-
-
-'''
-import pytest
-import matplotlib.pyplot as plt
-
-# Fixture to create objects/data for tests
-@pytest.fixture
-def test_data():
-    # Generate or create necessary test data
-    return [1, 2, 3], [4, 5, 6]  # Example data
-
-# Test function using the fixture
-def test_example(test_data):
-    # Perform assertions or verifications
-    assert len(test_data[0]) == len(test_data[1])
-
-    # Return data for potential plotting
-    return test_data
-
-# Function to plot based on returned test data
-def plot_test_data(test_data):
-    plt.plot(test_data[0], test_data[1])
-    plt.title("Plot using test data")
-    plt.savefig(f'path_to_save/test_plot.png')
-    plt.close()
-
-# Example usage of the test and plotting functions
-def test_and_plot():
-    # Run the test function and obtain data
-    data = test_example()
-
-    # Plot based on the test data
-    plot_test_data(data)
-'''
+    create_gif('imgs', 'imgs/test_online_gmm.gif', duration=400, prefix='iteration')
