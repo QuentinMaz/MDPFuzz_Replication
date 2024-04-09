@@ -2,7 +2,7 @@
 name = "mdpfuzz"
 version = "0.0.1"
 authors = [
-  { name="Mazouni Quentin", email="quentin@simula.no" },
+  { name="Anonymous" },
 ]
 description = "Replication of the framework MDPFuzz"
 readme = "README.md"
@@ -12,7 +12,3 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-
-[project.urls]
-Homepage = "https://github.com/QuentinMaz/Replicability_Study/"
-Issues = "https://github.com/QuentinMaz/Replicability_Study/issues"
