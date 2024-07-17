@@ -1,15 +1,26 @@
 import numpy as np
 import pandas as pd
 
-from src.logger import Logger, FuzzerLogger
+from mdpfuzz.logger import FuzzerLogger, Logger
 
-LOG_FILE_EXAMPLE_PATH = 'tests/log_file_example.txt'
+LOG_FILE_EXAMPLE_PATH = "tests/log_file_example.txt"
+
 
 def _check_df_example(df: pd.DataFrame):
-    assert len(df) == 499
-    assert df.columns.tolist() == ['input', 'oracle', 'reward', 'sensitivity', 'coverage', 'test_exec_time', 'coverage_time', 'run_time']
-    inputs = np.vstack(df['input'])
-    assert inputs.shape == (499, 4)
+    assert len(df) == 10
+    assert df.columns.tolist() == [
+        "input",
+        "oracle",
+        "reward",
+        "episode_length",
+        "sensitivity",
+        "coverage",
+        "test_exec_time",
+        "coverage_time",
+        "run_time",
+    ]
+    inputs = np.vstack(df["input"])
+    assert inputs.shape == (10, 4)
     assert np.issubdtype(inputs.dtype, np.integer)
 
 
