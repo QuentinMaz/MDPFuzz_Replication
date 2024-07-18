@@ -1,12 +1,12 @@
 import os
-import numpy as np
-import matplotlib.pyplot as plt
-
-import matplotlib.transforms as transforms
-from scipy.stats import multivariate_normal
-from matplotlib.patches import Ellipse
 from typing import List, Tuple, Union
+
+import matplotlib.pyplot as plt
+import matplotlib.transforms as transforms
+import numpy as np
+from matplotlib.patches import Ellipse
 from PIL import Image
+from scipy.stats import multivariate_normal
 
 
 def cross_product_with_dot(vector1: np.ndarray, vector2: np.ndarray):
@@ -26,8 +26,12 @@ def cross_product_with_outer(vector1: np.ndarray, vector2: np.ndarray):
 
 def compute_mean_of_squares(data: np.ndarray):
     # data[0:1] = data[0][:, np.newaxis].T
-    my_way = sum([np.matmul(d[:, np.newaxis], d[:, np.newaxis].T) for d in data]) / len(data)
-    original_way = sum([np.matmul(data[i:i+1].T, data[i:i+1]) for i in range(len(data))]) / len(data)
+    my_way = sum([np.matmul(d[:, np.newaxis], d[:, np.newaxis].T) for d in data]) / len(
+        data
+    )
+    original_way = sum(
+        [np.matmul(data[i : i + 1].T, data[i : i + 1]) for i in range(len(data))]
+    ) / len(data)
     assert np.array_equal(my_way, original_way)
     return my_way
 
@@ -38,23 +42,29 @@ def compute_mean(data: np.ndarray):
 
 def compute_mean_of_squares(data: np.ndarray):
     # data[0:1] = data[0][:, np.newaxis].T
-    my_way = sum([np.matmul(d[:, np.newaxis], d[:, np.newaxis].T) for d in data]) / len(data)
-    original_way = sum([np.matmul(data[i:i+1].T, data[i:i+1]) for i in range(len(data))]) / len(data)
+    my_way = sum([np.matmul(d[:, np.newaxis], d[:, np.newaxis].T) for d in data]) / len(
+        data
+    )
+    original_way = sum(
+        [np.matmul(data[i : i + 1].T, data[i : i + 1]) for i in range(len(data))]
+    ) / len(data)
     assert np.array_equal(my_way, original_way)
     return my_way
 
 
 def modify_covariance_matrix(covariance_matrix: np.ndarray):
-    '''Re-computes the input covariance matrix to prevent numerical instability.'''
+    """Re-computes the input covariance matrix to prevent numerical instability."""
     eigenvalues, eigenvectors = np.linalg.eigh(covariance_matrix)
     clipped_eigenvalues = np.maximum(eigenvalues, 1e-3)
     diagonal_matrix = np.diag(clipped_eigenvalues)
-    reconstructed_matrix = np.matmul(np.matmul(eigenvectors, diagonal_matrix), np.linalg.inv(eigenvectors))
+    reconstructed_matrix = np.matmul(
+        np.matmul(eigenvectors, diagonal_matrix), np.linalg.inv(eigenvectors)
+    )
     return reconstructed_matrix
 
 
 def modify_covariance_matrix2(covariance_matrix: np.ndarray):
-    '''A lighter version.'''
+    """A lighter version."""
     return covariance_matrix + np.eye(len(covariance_matrix)) * 1e-3
 
 
@@ -66,9 +76,9 @@ def generate_clustered_data(
     spread_factor: float = 0.1,
     rng: np.random.Generator = np.random.default_rng(),
     plot: bool = False,
-    legend: bool = False
+    legend: bool = False,
 ) -> Tuple[np.ndarray, Union[plt.Figure, None], Union[plt.Axes, None]]:
-    '''
+    """
     Generates clustered data points and optionally plots them in 2D or 3D.
 
     Parameters:
@@ -101,20 +111,26 @@ def generate_clustered_data(
     --------
     Tuple[np.ndarray, Union[plt.Figure, None], Union[plt.Axes, None]]
         Tuple containing generated data points, figure (if plotted), and axis (if plotted).
-    '''
+    """
 
     if num_dimensions not in [2, 3]:
-        raise ValueError('Visualization is only possible for 2D or 3D data.')
+        raise ValueError("Visualization is only possible for 2D or 3D data.")
 
     covariances = []
     for i in range(num_clusters):
-        for j in range(i+1, num_clusters):
-            dist = np.linalg.norm(np.array(cluster_means[i]) - np.array(cluster_means[j]))
+        for j in range(i + 1, num_clusters):
+            dist = np.linalg.norm(
+                np.array(cluster_means[i]) - np.array(cluster_means[j])
+            )
             covariances.append(np.eye(num_dimensions) * dist * spread_factor)
 
     data = []
     for i in range(num_clusters):
-        cluster_data = rng.multivariate_normal(mean=cluster_means[i], cov=covariances[i*(num_clusters-1)//2], size=num_points_per_cluster)
+        cluster_data = rng.multivariate_normal(
+            mean=cluster_means[i],
+            cov=covariances[i * (num_clusters - 1) // 2],
+            size=num_points_per_cluster,
+        )
         data.append(cluster_data)
 
     generated_data = np.concatenate(data)
@@ -123,52 +139,86 @@ def generate_clustered_data(
     ax = None
     if plot:
         fig = plt.figure(figsize=(10, 10))
-        fig.set_facecolor('white')
+        fig.set_facecolor("white")
         if num_dimensions == 2:
             ax = fig.add_subplot(111)
             for i in range(num_clusters):
-                ax.scatter(generated_data[i * num_points_per_cluster: (i + 1) * num_points_per_cluster, 0],
-                           generated_data[i * num_points_per_cluster: (i + 1) * num_points_per_cluster, 1],
-                           label='Mean: {}'.format(cluster_means[i]), s=20)
+                ax.scatter(
+                    generated_data[
+                        i * num_points_per_cluster : (i + 1) * num_points_per_cluster, 0
+                    ],
+                    generated_data[
+                        i * num_points_per_cluster : (i + 1) * num_points_per_cluster, 1
+                    ],
+                    label="Mean: {}".format(cluster_means[i]),
+                    s=20,
+                )
         elif num_dimensions == 3:
-            ax = fig.add_subplot(111, projection='3d')
+            ax = fig.add_subplot(111, projection="3d")
             for i in range(num_clusters):
-                ax.scatter(generated_data[i * num_points_per_cluster: (i + 1) * num_points_per_cluster, 0],
-                           generated_data[i * num_points_per_cluster: (i + 1) * num_points_per_cluster, 1],
-                           generated_data[i * num_points_per_cluster: (i + 1) * num_points_per_cluster, 2],
-                           label='Mean: {}'.format(cluster_means[i]), s=20)
+                ax.scatter(
+                    generated_data[
+                        i * num_points_per_cluster : (i + 1) * num_points_per_cluster, 0
+                    ],
+                    generated_data[
+                        i * num_points_per_cluster : (i + 1) * num_points_per_cluster, 1
+                    ],
+                    generated_data[
+                        i * num_points_per_cluster : (i + 1) * num_points_per_cluster, 2
+                    ],
+                    label="Mean: {}".format(cluster_means[i]),
+                    s=20,
+                )
         if legend:
             ax.legend()
         fig.tight_layout()
     return generated_data, fig, ax
 
 
-def plot_gaussian(mean, cov, ax, n_std=3.0, facecolor='none', **kwargs):
-    color = kwargs.pop('color', None)
+def plot_gaussian(mean, cov, ax, n_std=3.0, facecolor="none", **kwargs):
+    color = kwargs.pop("color", None)
     pearson = cov[0, 1] / np.sqrt(cov[0, 0] * cov[1, 1])
     ell_radius_x = np.sqrt(1 + pearson)
     ell_radius_y = np.sqrt(1 - pearson)
-    ellipse = Ellipse((0, 0),
+    ellipse = Ellipse(
+        (0, 0),
         width=ell_radius_x * 2,
         height=ell_radius_y * 2,
         facecolor=facecolor,
-        **kwargs)
+        **kwargs,
+    )
     scale_x = np.sqrt(cov[0, 0]) * n_std
     mean_x = mean[0]
     scale_y = np.sqrt(cov[1, 1]) * n_std
     mean_y = mean[1]
-    transf = transforms.Affine2D() \
-        .rotate_deg(45) \
-        .scale(scale_x, scale_y) \
+    transf = (
+        transforms.Affine2D()
+        .rotate_deg(45)
+        .scale(scale_x, scale_y)
         .translate(mean_x, mean_y)
+    )
     ellipse.set_transform(transf + ax.transData)
     if color is not None:
-        ax.plot(mean_x, mean_y, marker='o', markersize=10, markeredgecolor=color, markerfacecolor=color)
+        ax.plot(
+            mean_x,
+            mean_y,
+            marker="o",
+            markersize=10,
+            markeredgecolor=color,
+            markerfacecolor=color,
+        )
     return ax.add_patch(ellipse)
 
 
-def plot_gaussians(means, covariances, ax, n_std=3.0, rng: np.random.Generator = np.random.default_rng(), **kwargs):
-    '''
+def plot_gaussians(
+    means,
+    covariances,
+    ax,
+    n_std=3.0,
+    rng: np.random.Generator = np.random.default_rng(),
+    **kwargs
+):
+    """
         Plots multiple Gaussian distributions on a given axis.
 
     Parameters:
@@ -195,21 +245,35 @@ def plot_gaussians(means, covariances, ax, n_std=3.0, rng: np.random.Generator =
     --------
     matplotlib.axes.Axes
         The axis containing the plotted Gaussians.
-    '''
+    """
     k = len(means)
     assert k == len(covariances)
-    cmap = kwargs.pop('cmap', plt.cm.jet) # plt.cm.jet is a LinearSegmentedColormap
-    color_values_in_cmap = kwargs.pop('cmap_values', rng.uniform(size=k))
+    cmap = kwargs.pop("cmap", plt.cm.jet)  # plt.cm.jet is a LinearSegmentedColormap
+    color_values_in_cmap = kwargs.pop("cmap_values", rng.uniform(size=k))
     rgba_colors = [cmap(i) for i in color_values_in_cmap]
 
     for i in range(k):
-        plot_gaussian(means[i], covariances[i], ax, n_std=n_std, edgecolor=rgba_colors[i], color=rgba_colors[i], **kwargs)
+        plot_gaussian(
+            means[i],
+            covariances[i],
+            ax,
+            n_std=n_std,
+            edgecolor=rgba_colors[i],
+            color=rgba_colors[i],
+            **kwargs,
+        )
 
     return ax
 
 
 def remove_patches(ax):
-    ax.patches.clear()
+    # see:
+    # https://github.com/TheAlgorithms/Python/issues/9015
+    if not isinstance(ax.patches, List):
+        while len(ax.patches) != 0:
+            ax.patches[-1].remove()
+    else:
+        ax.patches.clear()
 
 
 def remove_plotted_points(ax):
@@ -223,7 +287,7 @@ def remove_plotted_points(ax):
 
 
 def remove_gaussian(ax):
-    '''Utility function that calls remove_patches and remove_plotted_points of the axis.'''
+    """Utility function that calls remove_patches and remove_plotted_points of the axis."""
     remove_patches(ax)
     remove_plotted_points(ax)
 
@@ -234,14 +298,25 @@ def log_likelihood(data: np.ndarray, coefficients, means, covariances):
     for x in data:
         tmp = 0.0
         for i in range(k):
-            tmp += coefficients[i] * multivariate_normal.pdf(x, mean=means[i], cov=covariances[i])
+            tmp += coefficients[i] * multivariate_normal.pdf(
+                x, mean=means[i], cov=covariances[i]
+            )
         log_likelihoods.append(np.log(tmp))
     return sum(log_likelihoods)
 
 
-def create_gif(folder_path: str, output_gif_name: str = 'output.gif', duration: int = 100, prefix: str = '') -> None:
+def create_gif(
+    folder_path: str,
+    output_gif_name: str = "output.gif",
+    duration: int = 100,
+    prefix: str = "",
+) -> None:
     prefix = prefix.lower()
-    png_files = [file for file in os.listdir(folder_path) if (file.lower().endswith('.png')) and (file.lower().startswith(prefix))]
+    png_files = [
+        file
+        for file in os.listdir(folder_path)
+        if (file.lower().endswith(".png")) and (file.lower().startswith(prefix))
+    ]
     png_files.sort()
 
     images = []
@@ -250,17 +325,14 @@ def create_gif(folder_path: str, output_gif_name: str = 'output.gif', duration: 
         img = Image.open(file_path)
         images.append(img)
 
-    output_gif_name = output_gif_name.split('.gif')[0] + '.gif'
+    output_gif_name = output_gif_name.split(".gif")[0] + ".gif"
     images[0].save(
-        output_gif_name,
-        save_all=True,
-        append_images=images[1:],
-        duration=duration
+        output_gif_name, save_all=True, append_images=images[1:], duration=duration
     )
 
 
 def plot_points(ax, data: Union[np.ndarray, List[np.ndarray]], **kwargs):
-    '''
+    """
         Plots a line with markers along it on a given axis.
 
     Parameters:
@@ -279,13 +351,20 @@ def plot_points(ax, data: Union[np.ndarray, List[np.ndarray]], **kwargs):
     --------
     matplotlib.axes.Axes
         The axis containing the plotted data.
-    '''
-    color = kwargs.get('color', 'blue')
-    step = kwargs.get('step', 1)
-    markersize = kwargs.get('markersize', 8)
+    """
+    color = kwargs.get("color", "blue")
+    step = kwargs.get("step", 1)
+    markersize = kwargs.get("markersize", 8)
     x = np.arange(len(data))
     ax.plot(x, data, color=color)
     for j, l in enumerate(data):
-        ax.plot(j, l, marker='o', markersize=markersize, markeredgecolor=color, markerfacecolor=color)
+        ax.plot(
+            j,
+            l,
+            marker="o",
+            markersize=markersize,
+            markeredgecolor=color,
+            markerfacecolor=color,
+        )
     ax.set_xticks(np.arange(len(data), step=step))
     return ax

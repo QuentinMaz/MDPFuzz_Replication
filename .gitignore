@@ -3,3 +3,7 @@
 __pycache__/
 imgs/
 .pytest_cache
+*.png
+*.gif
+*.json
+*.txt
