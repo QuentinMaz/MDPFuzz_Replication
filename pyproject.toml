@@ -1,0 +1,35 @@
+[project]
+name = "mdpfuzz"
+version = "0.0.1"
+authors = [
+  { name="Mazouni Quentin", email="quentin@simula.no" },
+]
+description = "MDPFuzz Replication"
+requires-python = ">= 3.5"
+keywords = ["mdpfuzz"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "numpy",
+    "pandas",
+    "tqdm",
+    "scipy",
+    "matplotlib",
+    "pillow",
+]
+
+[project.readme]
+file = "README.md"
+content-type = "text/markdown"
+
+[project.urls]
+Homepage = "https://github.com/QuentinMaz/Replicability_Study/"
+Issues = "https://github.com/QuentinMaz/Replicability_Study/issues"
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+]
