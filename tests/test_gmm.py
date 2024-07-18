@@ -82,7 +82,7 @@ def test_online_gmm(input_data):
         ll.append(gmm.log_likelihood(data_shuffled))
         remove_gaussian(ax)
         plot_gaussians(gmm.means, gmm.covariances, ax, cmap_values=input_data["colors"])
-        fig.savefig("imgs/iteration_{}.png".format(i))
+        fig.savefig("imgs/iteration_{:02d}.png".format(i))
 
     # dirty
     remove_gaussian(ax)

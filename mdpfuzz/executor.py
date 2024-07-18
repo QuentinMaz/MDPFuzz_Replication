@@ -1,7 +1,7 @@
-import numpy as np
-
 from abc import ABC, abstractmethod
 from typing import Any, Tuple
+
+import numpy as np
 
 
 class Executor(ABC):
@@ -25,7 +25,7 @@ class Executor(ABC):
         pass
 
     @abstractmethod
-    def load_policy(self):
+    def load_policy(self, **kwargs):
         pass
 
     @abstractmethod

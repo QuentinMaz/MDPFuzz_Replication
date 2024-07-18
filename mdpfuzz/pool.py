@@ -1,8 +1,7 @@
-import numpy as np
-
-
 from abc import ABC, abstractmethod
 from typing import List, Tuple
+
+import numpy as np
 
 
 class Pool(ABC):

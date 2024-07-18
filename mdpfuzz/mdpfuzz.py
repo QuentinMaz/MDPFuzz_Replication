@@ -182,8 +182,8 @@ class Fuzzer:
         Conducts fuzzing to generate test cases for the system under test (SUT).
 
         Args:
-        - n (int): Number of iterations for fuzzing.
-        - policy (tt.TestAgent): The testing policy or agent guiding the fuzzing process.
+        - n (int): Number of inputs for initializing the pool.
+        - policy (tt.TestAgent): The policy under test.
         - saving_path (str, optional): Path to save logs and results (default: None).
         - local_sensitivity (bool, optional): Flag indicating whether to compute local sensitivity (default: False).
         - test_budget_in_seconds (int, optional): Time budget for fuzzing in seconds (default: None).

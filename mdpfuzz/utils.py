@@ -267,6 +267,8 @@ def plot_gaussians(
 
 
 def remove_patches(ax):
+    # see:
+    # https://github.com/TheAlgorithms/Python/issues/9015
     if not isinstance(ax.patches, List):
         while len(ax.patches) != 0:
             ax.patches[-1].remove()
