@@ -29,13 +29,25 @@ As such, using the package involves 3 simple steps:
 
 ### Example
 
+In the file `dqn_mountain_car.py`, we test a DQN agent (learnt using the library [Stable Baselines3](https://github.com/DLR-RM/stable-baselines3)) for the [Mountain Car](https://gymnasium.farama.org/environments/classic_control/mountain_car/) environment.
+
 #### Setup
 
-Setup a virtual environment with, for instance, (conda)[https://docs.conda.io/en/latest/]:
-```
+Setup a virtual environment with, for instance, [conda](https://docs.conda.io/en/latest/):
+```bash
 conda create -n demo python=3.10.12
 conda activate demo
 pip install git+https://github.com/QuentinMaz/MDPFuzz_Replication
+# install gymnasium and stable-baselines3 dependencies
 pip install gymnasium==0.29.1
 pip install stable-baselines3==2.2.1
 ```
+Make sure to activate the virtual environment (`conda activate demo`) before executing the script!
+
+Additionally, we provide the script as a [Jupyter notebook](https://jupyter.org/) in which with we detail each step of the demonstration.
+If you use the notebook, install the following dependency in the virtual environment: `pip install ipykernel`.
+
+The demonstration consists of:
+1. Learning and saving the DQN agent (`dqn_mountain_car.zip`).
+2. Testing the agent with a budget of 2500 test cases, with both Random Testing and MDPFuzz. The results of Random Testing are recorded in the current directory prefixed by `random_testing`, while the results of MDPFuzz are prefixed by `mdpfuzz`.
+3. Plotting the evolution of the number of failures found over the test cases by the two methods in the file `failure_results_comparison_demo.png`.
