@@ -13,10 +13,10 @@ setup(
     version="0.0.1",
     author="Mazouni Quentin",
     author_email="quentin@simula.no",
-    description="MDPFuzz Replication",
+    description="Re-implementation of MDPFuzz.",
     long_description=README,
     long_description_content_type="text/markdown",
-    url="https://github.com/QuentinMaz/Replicability_Study/",
+    url="https://github.com/QuentinMaz/MDPFuzz_Replication/",
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
@@ -39,7 +39,7 @@ setup(
         ],
     },
     project_urls={
-        "Homepage": "https://github.com/QuentinMaz/Replicability_Study/",
-        "Issues": "https://github.com/QuentinMaz/Replicability_Study/issues",
+        "Homepage": "https://github.com/QuentinMaz/MDPFuzz_Replication/",
+        "Issues": "https://github.com/QuentinMaz/MDPFuzz_Replication/issues",
     },
 )
