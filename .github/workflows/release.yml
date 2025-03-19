@@ -34,7 +34,7 @@ jobs:
           path: dist/
 
   upload-to-pypi:
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     needs: build-artifacts
     runs-on: ubuntu-latest
 
