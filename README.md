@@ -8,7 +8,7 @@ This tool has been used in the paper *Replicability Study: Policy Testing with M
 
 You can install the package with `pip`:
 ```
-pip install git+https://github.com/QuentinMaz/MDPFuzz_Replication
+pip install mdpfuzz
 ```
 One can also want to install the package locally:
 ```
@@ -37,7 +37,7 @@ Setup a virtual environment with, for instance, [conda](https://docs.conda.io/en
 ```bash
 conda create -n demo python=3.10.12
 conda activate demo
-pip install git+https://github.com/QuentinMaz/MDPFuzz_Replication
+pip install mdpfuzz
 # install gymnasium and stable-baselines3 dependencies
 pip install gymnasium==0.29.1
 pip install stable-baselines3==2.2.1
