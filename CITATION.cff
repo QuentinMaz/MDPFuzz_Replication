@@ -14,3 +14,6 @@ keywords:
   - scipy
   - numpy
 license: MIT
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.15055468

@@ -1,5 +1,6 @@
 # Replicate of MDPFuzz
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15055468.svg)](https://doi.org/10.5281/zenodo.15055468)
 
 This repository contains a re-implementation the policy testing framework [MDPFuzz](https://sites.google.com/view/mdpfuzz/evaluation-results?authuser=0), whose original code can be found [here](https://github.com/Qi-Pang/MDPFuzz).
 This tool has been used in the paper *Replicability Study: Policy Testing with MDPFuzz*.
