@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+title: mdpfuzz
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - family-names: "Mazouni"
+    given-names: "Quentin"
+    orcid: "https://orcid.org/0009-0003-3519-5514"
+repository-code: "https://github.com/QuentinMaz/MDPFuzz_Replicate"
+keywords:
+  - software testing
+  - replicability
+  - reinforcement learning
+  - scipy
+  - numpy
+license: MIT
